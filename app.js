@@ -47,7 +47,8 @@
     day: [['يوم واحد', 'يومين', 'أيام', 'يوم'], ['day', 'days']],
     log: [['تسجيل واحد', 'تسجيلين', 'تسجيلات', 'تسجيل'], ['entry', 'entries']],
     ex: [['تمرين واحد', 'تمرينين', 'تمارين', 'تمرين'], ['exercise', 'exercises']],
-    sc: [['قسم واحد', 'قسمين', 'أقسام', 'قسم'], ['section', 'sections']]
+    sc: [['قسم واحد', 'قسمين', 'أقسام', 'قسم'], ['section', 'sections']],
+    wk: [['أسبوع واحد', 'أسبوعين', 'أسابيع', 'أسبوع'], ['week', 'weeks']]
   };
   // الكلمة بدون الرقم: 1 تمرين، 2 تمرينين، 3-10 تمارين، 11+ تمرين
   const exWord = n => (EN ? (n === 1 ? 'exercise' : 'exercises') : n === 2 ? 'تمرينين' : n >= 3 && n <= 10 ? 'تمارين' : 'تمرين');
@@ -69,12 +70,13 @@
   }
 
   /* ---------- التواريخ ---------- */
-  let dfDay, dfDate, dfWeek;
+  let dfDay, dfDate, dfWeek, dfShort;
   function setLocale() {
     const L = EN ? 'en-GB' : 'ar-SA-u-ca-gregory-nu-latn';
     dfDay = new Intl.DateTimeFormat(L, { weekday: 'long', day: 'numeric', month: 'long' });
     dfDate = new Intl.DateTimeFormat(L, { day: 'numeric', month: 'long', year: 'numeric' });
     dfWeek = new Intl.DateTimeFormat(L, { weekday: 'long' });
+    dfShort = new Intl.DateTimeFormat(L, { day: 'numeric', month: 'short' });
   }
   const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
   const daysAgo = t => Math.round((startOfDay(Date.now()) - startOfDay(t)) / 864e5);
@@ -97,7 +99,7 @@
   const okStr = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max;
 
   function blank() {
-    return { v: 1, name: '', body: [], logs: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', lang: 'ar', mu: {}, step: {} } };
+    return { v: 1, name: '', body: [], logs: [], plans: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', lang: 'ar', mu: {}, step: {} } };
   }
   function cleanSets(sets, k) {
     if (!Array.isArray(sets)) return null;
@@ -137,6 +139,13 @@
       });
     }
     b.hidden = Array.isArray(o.hidden) ? o.hidden.filter(okId) : [];
+    if (Array.isArray(o.plans)) {
+      o.plans.slice(0, 40).forEach(x => {
+        if (!x || !okId(x.id) || !okStr(x.name, 40) || b.plans.some(y => y.id === x.id)) return;
+        const items = Array.isArray(x.items) ? [...new Set(x.items.filter(okId))].slice(0, 40) : [];
+        b.plans.push({ id: x.id, name: x.name.trim().slice(0, 30), items, t: isFinite(+x.t) ? +x.t : Date.now() });
+      });
+    }
     if (okStr(o.name, 40)) b.name = o.name.trim().slice(0, 24);
     if (Array.isArray(o.body)) {
       o.body.forEach(x => {
@@ -314,6 +323,9 @@
     trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
     x: svg('<path d="M7 7l10 10M17 7L7 17"/>'),
     search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'),
+    cal: svg('<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/>'),
+    up: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+    down: svg('<path d="M12 5v14M6 13l6 6 6-6"/>'),
     globe: svg('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.3 3.5 5.2 3.5 8.5s-1.2 6.2-3.5 8.5c-2.3-2.3-3.5-5.2-3.5-8.5s1.2-6.2 3.5-8.5z"/>')
   };
 
@@ -325,7 +337,7 @@
     h.dir = EN ? 'ltr' : 'rtl';
     document.title = tr('أوزاني | حسبة أوزان النادي', 'Awzani | Gym weight log');
     setLocale();
-    const nav = { home: tr('الأقسام', 'Sections'), log: tr('السجل', 'Log'), set: tr('الإعدادات', 'Settings') };
+    const nav = { home: tr('الأقسام', 'Sections'), plan: tr('جدولي', 'My plans'), log: tr('السجل', 'Log'), set: tr('الإعدادات', 'Settings') };
     $$('.tabs a').forEach(a => { const s = $('span', a); if (s) s.textContent = nav[a.dataset.v] || s.textContent; });
     const tabs = $('.tabs');
     if (tabs) tabs.setAttribute('aria-label', tr('التنقل', 'Navigation'));
@@ -349,7 +361,7 @@
   }
 
   /* ---------- التنقل ---------- */
-  let curSec = null, curM = null;
+  let curSec = null, curM = null, curPlan = null;
   function setNav(v) {
     $$('.tabs a').forEach(a => {
       if (a.dataset.v === v) a.setAttribute('aria-current', 'page');
@@ -360,13 +372,23 @@
     const parts = location.hash.replace(/^#\/?/, '').split('/');
     const v = parts[0], id = decodeURIComponent(parts[1] || '');
     curSec = curM = null;
+    curPlan = null;
     const sheet = $('#sheet');
     if (sheet && sheet.open) sheet.close();
     window.scrollTo(0, 0);
     document.body.classList.toggle('is-start', !S.name);
     if (!S.name) return viewStart();
     if (v === 's' && secById(id)) { setNav('home'); return viewSection(id); }
-    if (v === 'm' && mById(id)) { setNav('home'); return viewMachine(id); }
+    if (v === 'm' && mById(id)) {
+      const pl = planById(decodeURIComponent(parts[2] || ''));
+      curPlan = pl && pl.items.includes(id) ? pl : null;
+      setNav(curPlan ? 'plan' : 'home');
+      return viewMachine(id);
+    }
+    if (v === 'plan' && !id) { setNav('plan'); return viewPlans(); }
+    if (v === 'plan' && planById(id)) { setNav('plan'); return viewPlan(id); }
+    if (v === 'plan-new') { setNav('plan'); return viewPlanEdit(null, id); }
+    if (v === 'plan-edit' && planById(id)) { setNav('plan'); return viewPlanEdit(id); }
     if (v === 'log') { setNav('log'); return viewLog(); }
     if (v === 'set') { setNav('set'); return viewSettings(); }
     setNav('home');
@@ -522,6 +544,11 @@
       <label class="search">${I.search}<input id="q" type="search" placeholder="${tr('ابحث عن جهاز، مثل: تشيست برس', 'Search machines, e.g. chest press')}" autocomplete="off" enterkeyhint="search" aria-label="${tr('ابحث عن جهاز', 'Search machines')}"></label>
       <div id="results" class="mlist" hidden></div>
       <div id="homeBody">
+        ${S.plans.length ? `<section><h2 class="h2">${tr('جدولي', 'My plans')}</h2><div class="chips">${S.plans.map(pl => {
+          const ms = planMs(pl);
+          const dn = ms.filter(m => doneToday(m.id)).length;
+          return `<a class="chip plan-chip" href="#/plan/${esc(pl.id)}">${I.cal}<span>${esc(pl.name)}</span>${dn ? `<b class="nw">${dn}/${ms.length}</b>` : ''}</a>`;
+        }).join('')}</div></section>` : ''}
         ${recent.length ? `<section><h2 class="h2">${tr('رجعت لها مؤخرًا', 'Used recently')}</h2><div class="chips">${recent.map(m => `<a class="chip" href="#/m/${esc(m.id)}"><span class="dot c-${esc(secColor(m.s))}" aria-hidden="true"></span>${esc(mName(m))}</a>`).join('')}</div></section>` : ''}
         <section>
           <h2 class="h2">${tr('الأقسام', 'Sections')}</h2>
@@ -690,7 +717,9 @@
     const tipText = today ? tr('سجلت هالجهاز اليوم. لو بتسجل جولة ثانية عدّل الأرقام واضغط سجّل.', 'You logged this machine today. For another round, change the numbers and tap Log it.') : sug.text;
     const name = mName(m);
     app.innerHTML = `
-      <a class="back" href="${sec ? '#/s/' + esc(sec.id) : '#/'}">${I.back}${esc(sec ? secName(sec) : tr('الأقسام', 'Sections'))}</a>
+      ${curPlan
+        ? `<a class="back" href="#/plan/${esc(curPlan.id)}">${I.back}${esc(curPlan.name)}</a>`
+        : `<a class="back" href="${sec ? '#/s/' + esc(sec.id) : '#/'}">${I.back}${esc(sec ? secName(sec) : tr('الأقسام', 'Sections'))}</a>`}
       <header class="mhead${hasPhoto(m) ? ' has-photo' : ''}">
         <div class="mhead-t">
           <h1>${esc(name)}</h1>
@@ -703,6 +732,7 @@
         <p class="tip-sug"><span class="spark" aria-hidden="true"></span>${esc(tipText)}</p>
       </div>
       <section class="rig" id="rig">${m.k === 'c' ? cardioForm(m) : m.k === 't' ? timedForm() : m.k === 'bw' ? bwForm() : weightForm(m)}</section>
+      ${curPlan ? '<section class="next-card" id="nextCard" aria-live="polite"></section>' : ''}
       <section class="hist" id="hist"></section>
       <div class="foot">${m.custom
         ? `<button class="text-btn danger" type="button" data-act="del-m">${tr('احذف الجهاز', 'Delete machine')}</button>`
@@ -711,6 +741,7 @@
     if (F.detail) applyDetail(m);
     updAll(m);
     renderHist(m);
+    renderNext(m);
   }
 
   function cell(v, label, cls) {
@@ -994,6 +1025,290 @@
     el.innerHTML = html;
   }
 
+  /* ---------- جدولي: أيام ثابتة (يوم البوش...) وتطورها بالأسابيع ---------- */
+  const PLAN_SUG = [
+    { k: 'push', ar: 'يوم البوش', en: 'Push day', items: ['bench-bar', 'incline-db', 'chest-press', 'shoulder-press-db', 'lateral-db', 'pushdown', 'overhead-tri'] },
+    { k: 'pull', ar: 'يوم البول', en: 'Pull day', items: ['lat-pulldown', 'cable-row', 'row-db', 'face-pull', 'rear-delt', 'curl-db', 'hammer'] },
+    { k: 'legs', ar: 'يوم الأرجل', en: 'Leg day', items: ['squat-bar', 'leg-press', 'rdl', 'leg-ext', 'leg-curl-seated', 'calf-standing'] },
+    { k: 'upper', ar: 'الجزء العلوي', en: 'Upper body', items: ['bench-bar', 'lat-pulldown', 'shoulder-press-db', 'cable-row', 'curl-db', 'pushdown'] },
+    { k: 'lower', ar: 'الجزء السفلي', en: 'Lower body', items: ['squat-bar', 'rdl', 'leg-press', 'leg-curl-lying', 'calf-seated', 'cable-crunch'] },
+    { k: 'full', ar: 'الجسم كامل', en: 'Full body', items: ['squat-bar', 'bench-bar', 'lat-pulldown', 'shoulder-press-mc', 'leg-curl-seated', 'plank'] }
+  ];
+  const sugItems = sg => sg.items.filter(id => mById(id) && !S.hidden.includes(id));
+  const planById = id => S.plans.find(p => p.id === id);
+  const planMs = p => p.items.map(mById).filter(Boolean);
+  const doneToday = id => { const t0 = startOfDay(Date.now()); return S.logs.some(l => l.m === id && l.t >= t0); };
+  const weekStart = t => { const d = new Date(startOfDay(t)); d.setDate(d.getDate() - d.getDay()); return d.getTime(); }; // الأسبوع يبدأ الأحد
+  const weekDate = (w0, k) => { const d = new Date(w0); d.setDate(d.getDate() + k * 7); return d; };
+
+  // أفضل رقم بالتسجيل: أعلى وزن، أو أكثر عدات، أو أطول ثبات، أو دقائق الكارديو
+  function metricOf(l, u) {
+    if (l.k === 'c') return +l.min || 0;
+    if (l.k === 't') return Math.max(...l.sets.map(s => +s.s || 0));
+    if (l.k === 'bw') return Math.max(...l.sets.map(s => +s.r || 0));
+    return Math.round(Math.max(...l.sets.map(s => conv(+s.w || 0, l.u || 'kg', u))) * 10) / 10;
+  }
+  const metricUnit = (m, u) => (m.k === 'c' ? tr('دقيقة', 'min') : m.k === 't' ? tr('ثانية', 'sec') : m.k === 'bw' ? tr('عدات', 'reps') : unitName(u));
+
+  function planData(p) {
+    const ms = planMs(p);
+    const ids = new Set(ms.map(m => m.id));
+    const ls = S.logs.filter(l => ids.has(l.m));
+    const t0 = startOfDay(Date.now());
+    const w0 = weekStart(ls.reduce((a, l) => Math.min(a, l.t), p.t));
+    const wi = t => Math.round((weekStart(t) - w0) / (7 * 864e5));
+    const rows = ms.map(m => {
+      const u = unitOf(m, lastLog(m.id));
+      const by = new Map();
+      ls.forEach(l => { if (l.m === m.id) { const k = wi(l.t); by.set(k, Math.max(by.get(k) || 0, metricOf(l, u))); } });
+      const ks = [...by.keys()].sort((a, b) => a - b);
+      return { m, u, by, ks, delta: ks.length >= 2 ? round2(by.get(ks[ks.length - 1]) - by.get(ks[0])) : null };
+    });
+    return {
+      ms, rows, w0,
+      nowW: wi(Date.now()),
+      today: new Set(ls.filter(l => l.t >= t0).map(l => l.m)),
+      days: new Set(ls.map(l => dayKey(l.t))).size,
+      weeks: new Set(ls.map(l => wi(l.t))).size,
+      last: ls.reduce((a, l) => Math.max(a, l.t), 0),
+      tracked: rows.filter(r => r.ks.length >= 2).length,
+      up: rows.filter(r => r.delta > 0).length
+    };
+  }
+  function planMeta(d) {
+    const n = plural(d.ms.length, W.mc);
+    return d.last
+      ? tr(`${n}، آخر مرة ${rel(d.last)}`, `${n}, last time ${rel(d.last)}`)
+      : tr(`${n}، ما بديته للحين`, `${n}, not started yet`);
+  }
+  const signed = v => (v > 0 ? '+' : '−') + fmt(Math.abs(v));
+
+  function viewPlans() {
+    const ps = S.plans;
+    app.innerHTML = `
+      <header class="top small">
+        <h1 class="title">${tr('جدولي', 'My plans')}</h1>
+        <p class="tag">${tr('ثبّت أجهزة كل يوم تمرين، مثل يوم البوش، وتابع أوزانك عليها أسبوع بعد أسبوع.', 'Fix the machines for each training day, like push day, and follow your weights on them week by week.')}</p>
+      </header>
+      ${ps.length ? `<div class="mlist">${ps.map(p => {
+        const d = planData(p);
+        return `<a class="mrow pcard" href="#/plan/${esc(p.id)}">
+          <span class="mrow-t"><b>${esc(p.name)}</b><small>${esc(planMeta(d))}</small>${d.tracked ? `<span class="mrow-l">${tr(`تطورت في ${d.up} من ${plural(d.tracked, W.mc)}`, `Improved on ${d.up} of ${plural(d.tracked, W.mc)}`)}</span>` : ''}</span>
+          ${d.today.size ? `<span class="pcard-v"><span class="led">${d.today.size}/${d.ms.length}</span><small>${tr('اليوم', 'today')}</small></span>` : '<span></span>'}
+          ${I.chev}
+        </a>`;
+      }).join('')}</div>
+      <a class="add-row" href="#/plan-new">${I.plus}<span>${tr('جدول جديد', 'New plan')}</span></a>`
+      : `<p class="empty">${tr('ما عندك جدول للحين. اختر يومك ونقترح لك أجهزته، وتشيل وتضيف براحتك.', "No plans yet. Pick your day to get suggested machines, then remove or add as you like.")}</p>
+      <div class="chips sugg">${PLAN_SUG.map(s => `<a class="chip" href="#/plan-new/${s.k}">${tr(s.ar, s.en)}</a>`).join('')}<a class="chip" href="#/plan-new">${tr('أخرى', 'Other')}</a></div>`}`;
+  }
+
+  function weekTable(d) {
+    const cols = [];
+    for (let k = d.nowW; k >= 0 && cols.length < 12; k--) cols.push(k); // الأحدث أول
+    const head = cols.map(k => `<th scope="col"${k === d.nowW ? ' class="now"' : ''}>${tr('أسبوع', 'Week')} ${k + 1}<small>${dfShort.format(weekDate(d.w0, k))}</small></th>`).join('');
+    const body = d.rows.map(r => {
+      const cells = cols.map(k => {
+        const now = k === d.nowW ? ' now' : '';
+        if (!r.by.has(k)) return `<td class="none${now}">—</td>`;
+        const v = r.by.get(k);
+        const prev = r.ks.filter(x => x < k).pop();
+        const pv = prev == null ? null : r.by.get(prev);
+        const cls = pv == null || v === pv ? '' : v > pv ? 'up' : 'down';
+        return `<td class="${cls}${now}"><b>${fmt(v)}</b></td>`;
+      }).join('');
+      const dl = r.delta == null ? '' : r.delta === 0
+        ? ` <span>${tr('بدون تغيير', 'no change')}</span>`
+        : ` <span class="${r.delta > 0 ? 'up-t' : 'down-t'}">${signed(r.delta)}</span>`;
+      return `<tr><th scope="row" class="wk-m"><b>${esc(mName(r.m))}</b><small>${esc(metricUnit(r.m, r.u))}${dl}</small></th>${cells}</tr>`;
+    }).join('');
+    return `<div class="wk-wrap" tabindex="0" role="region" aria-label="${tr('جدول التطور بالأسابيع', 'Weekly progress table')}">
+        <table class="wk"><thead><tr><th scope="col" class="wk-m">${tr('الجهاز', 'Machine')}</th>${head}</tr></thead><tbody>${body}</tbody></table>
+      </div>
+      <p class="wk-note">${tr('كل خانة فيها أفضل رقم لك بالأسبوع: أعلى وزن، أو أكثر عدات، أو أطول وقت. الأخضر يعني تطورت عن الأسبوع اللي قبله، والرقم تحت اسم الجهاز هو الفرق من أول أسبوع.', 'Each cell is your best for that week: top weight, most reps or longest time. Green means you beat your previous week. The number under each machine is the change since your first week.')}</p>`;
+  }
+
+  function viewPlan(id) {
+    const p = planById(id);
+    const d = planData(p);
+    app.innerHTML = `
+      <a class="back" href="#/plan">${I.back}${tr('جدولي', 'My plans')}</a>
+      <header class="shead plan-head">
+        <div><h1>${esc(p.name)}</h1><p>${esc(planMeta(d))}</p></div>
+        <a class="btn sm" href="#/plan-edit/${esc(p.id)}">${tr('عدّل', 'Edit')}</a>
+      </header>
+      <section class="board" aria-label="${tr('ملخص الجدول', 'Plan summary')}">
+        <div class="board-top"><span>${tr('خلصت اليوم', 'Done today')}</span></div>
+        <div class="board-main"><span class="led led-xl">${d.today.size}</span><span class="board-u">${tr(`من ${plural(d.ms.length, W.mc)}`, `of ${plural(d.ms.length, W.mc)}`)}</span></div>
+        <div class="board-cells" style="--n:3">
+          <div><span class="led">${d.days}</span><span>${tr('مرات التمرين', 'Sessions')}</span></div>
+          <div><span class="led">${d.weeks}</span><span>${tr('أسابيع التمرين', 'Weeks trained')}</span></div>
+          <div><span class="led${d.tracked ? '' : ' dim'}">${d.tracked ? `${d.up}/${d.tracked}` : '—'}</span><span>${tr('أجهزة تطورت فيها', 'Machines improved')}</span></div>
+        </div>
+      </section>
+      <h2 class="h2">${tr('الأجهزة بالترتيب', 'Machines in order')}</h2>
+      ${d.ms.length ? `<div class="mlist">${d.ms.map((m, i) => {
+        const l = lastLog(m.id);
+        const done = d.today.has(m.id);
+        return `<a class="mrow prow${done ? ' done' : ''}" href="#/m/${esc(m.id)}/${esc(p.id)}">
+          <span class="pnum">${i + 1}</span>
+          ${thumb(m)}
+          <span class="mrow-t"><b>${esc(mName(m))}</b>${l ? `<span class="mrow-l">${esc(summary(l))}<em>${rel(l.t)}</em></span>` : `<small>${tr('ما سجلته للحين', 'Not logged yet')}</small>`}</span>
+          ${done ? `<span class="ok" role="img" aria-label="${tr('خلصته اليوم', 'Done today')}">${I.check}</span>` : I.chev}
+        </a>`;
+      }).join('')}</div>` : `<p class="empty">${tr('الجدول فاضي. اضغط عدّل وأضف أجهزته.', 'This plan is empty. Tap Edit to add machines.')}</p>`}
+      <h2 class="h2">${tr('تطور أوزانك بالأسابيع', 'Your progress by week')}</h2>
+      ${d.weeks ? weekTable(d) : `<p class="empty">${tr('أول ما تسجل على أجهزة الجدول يطلع هنا أفضل رقم لك كل أسبوع، وتشوف وش زاد.', 'Once you log on this plan, your best for each week shows up here, so you can see what went up.')}</p>`}`;
+  }
+
+  function renderNext(m) {
+    const el = $('#nextCard');
+    if (!el || !curPlan) return;
+    const ms = planMs(curPlan);
+    const i = ms.findIndex(x => x.id === m.id);
+    const nx = ms.slice(i + 1).concat(ms.slice(0, i)).find(x => !doneToday(x.id));
+    const doneN = ms.filter(x => doneToday(x.id)).length;
+    const head = `<p>${esc(curPlan.name)}: ${tr(`الجهاز ${i + 1} من ${ms.length}، خلصت ${doneN}`, `machine ${i + 1} of ${ms.length}, ${doneN} done`)}</p>`;
+    if (nx) {
+      el.innerHTML = head + `<a class="btn-next" href="#/m/${esc(nx.id)}/${esc(curPlan.id)}"><span>${tr('التالي', 'Next')}: ${esc(mName(nx))}</span>${I.chev}</a>`;
+    } else if (!doneToday(m.id)) {
+      el.innerHTML = head + `<p class="next-last">${tr('هذا آخر جهاز باقي في الجدول اليوم.', 'This is the last machine left in the plan today.')}</p>`;
+    } else {
+      el.innerHTML = head + `<a class="btn-next" href="#/plan/${esc(curPlan.id)}"><span>${tr('خلصت الجدول اليوم. شوف تطورك', 'Plan done for today. See your progress')}</span>${I.chev}</a>`;
+    }
+  }
+
+  /* تعديل الجدول أو جدول جديد */
+  let PE = null;
+  function renderPE() {
+    const ms = PE.items.map(mById).filter(Boolean);
+    $('#peH').textContent = tr(`أجهزة الجدول بالترتيب (${ms.length})`, `Plan machines in order (${ms.length})`);
+    $('#peList').innerHTML = ms.length ? ms.map((m, i) => `<li class="mrow perow" data-mid="${esc(m.id)}">
+        <span class="pnum">${i + 1}</span>
+        <span class="mrow-t"><b>${esc(mName(m))}</b><small>${esc(secName(secById(m.s)))}</small></span>
+        <span class="pe-act">
+          <button type="button" data-mv="-1" aria-label="${tr('طلّعه فوق', 'Move up')}: ${esc(mName(m))}"${i === 0 ? ' disabled' : ''}>${I.up}</button>
+          <button type="button" data-mv="1" aria-label="${tr('نزّله تحت', 'Move down')}: ${esc(mName(m))}"${i === ms.length - 1 ? ' disabled' : ''}>${I.down}</button>
+          <button type="button" data-rm="1" aria-label="${tr('شيله', 'Remove')}: ${esc(mName(m))}">${I.x}</button>
+        </span>
+      </li>`).join('') : `<li class="pe-empty">${tr('ما اخترت أجهزة للحين. اختر من الأقسام تحت.', 'No machines yet. Pick from the sections below.')}</li>`;
+    $$('#pePick .pk-row').forEach(b => b.setAttribute('aria-pressed', String(PE.items.includes(b.dataset.mid))));
+    $$('#pePick .pk').forEach(d => {
+      const n = $$('.pk-row[aria-pressed="true"]', d).length;
+      $('summary small', d).textContent = n ? tr(`اخترت ${n}`, `${n} selected`) : '';
+    });
+    $$('[data-sug]').forEach(b => b.setAttribute('aria-pressed', String(PE.sug != null && b.dataset.sug === PE.sug)));
+  }
+  function viewPlanEdit(id, sugKey) {
+    const p = id ? planById(id) : null;
+    const sg = PLAN_SUG.find(s => s.k === sugKey);
+    PE = p
+      ? { id: p.id, name: p.name, items: planMs(p).map(m => m.id), sug: null, auto: false }
+      : { id: null, name: sg ? tr(sg.ar, sg.en) : '', items: sg ? sugItems(sg) : [], sug: sg ? sg.k : null, auto: !!sg };
+    const pick = sections().map(s => {
+      const ms = machines().filter(m => m.s === s.id && (!S.hidden.includes(m.id) || PE.items.includes(m.id)));
+      if (!ms.length) return '';
+      return `<details class="pk"><summary><span class="dot c-${esc(s.color)}" aria-hidden="true"></span>${esc(secName(s))}<small></small></summary>${ms.map(m => `<button type="button" class="pk-row" data-mid="${esc(m.id)}" aria-pressed="false">${thumb(m)}<span class="mrow-t"><b>${esc(mName(m))}</b>${!EN && m.e ? `<small><bdi dir="ltr">${esc(m.e)}</bdi></small>` : ''}</span><span class="box" aria-hidden="true">${I.check}</span></button>`).join('')}</details>`;
+    }).join('');
+    app.innerHTML = `
+      <a class="back" href="${p ? '#/plan/' + esc(p.id) : '#/plan'}">${I.back}${esc(p ? p.name : tr('جدولي', 'My plans'))}</a>
+      <header class="top small"><h1 class="title">${p ? tr('عدّل الجدول', 'Edit plan') : tr('جدول جديد', 'New plan')}</h1></header>
+      <label class="fld"><span>${tr('اسم الجدول', 'Plan name')}</span><input type="text" id="peName" maxlength="30" value="${esc(PE.name)}" placeholder="${tr('مثل: يوم البوش', 'e.g. Push day')}" autocomplete="off"></label>
+      ${p ? '' : `<div class="chips sugg" role="group" aria-label="${tr('اقتراحات', 'Suggestions')}">${PLAN_SUG.map(s => `<button type="button" class="chip" data-sug="${s.k}" aria-pressed="false">${tr(s.ar, s.en)}</button>`).join('')}<button type="button" class="chip" data-sug="" aria-pressed="false">${tr('أخرى', 'Other')}</button></div>
+      <p class="hint">${tr('اختر يومك ونحط لك أجهزته المعتادة، وبعدها شيل وأضف اللي يناسبك.', 'Pick your day to fill in its usual machines, then remove or add what suits you.')}</p>`}
+      <h2 class="h2" id="peH"></h2>
+      <ol class="mlist plist" id="peList"></ol>
+      <h2 class="h2">${tr('أضف أجهزة', 'Add machines')}</h2>
+      <label class="search">${I.search}<input id="peQ" type="search" placeholder="${tr('ابحث عن جهاز', 'Search machines')}" autocomplete="off" enterkeyhint="search" aria-label="${tr('ابحث عن جهاز', 'Search machines')}"></label>
+      <div id="pePick">${pick}</div>
+      <div class="savebar"><button type="button" class="go" id="peSave">${I.check}<span>${tr('احفظ الجدول', 'Save plan')}</span></button></div>
+      ${p ? `<div class="foot"><button class="text-btn danger" type="button" id="peDel">${tr('احذف الجدول', 'Delete plan')}</button></div>` : ''}`;
+    renderPE();
+
+    const nameIn = $('#peName');
+    nameIn.addEventListener('input', () => { PE.name = nameIn.value; });
+    $$('[data-sug]').forEach(b => b.addEventListener('click', () => {
+      const s = PLAN_SUG.find(x => x.k === b.dataset.sug);
+      if (s) {
+        // اختيار يوم ثاني يبدّل الأجهزة، ولو عدّلت عليها يدويًا نتأكد قبل
+        if (PE.items.length && !PE.auto && !confirm(tr(`تبدّل الأجهزة اللي اخترتها بأجهزة ${s.ar}؟`, `Replace your picked machines with the ${s.en.toLowerCase()} machines?`))) return;
+        PE.name = tr(s.ar, s.en);
+        nameIn.value = PE.name;
+        PE.items = sugItems(s);
+        PE.auto = true;
+        PE.sug = s.k;
+      } else {
+        if (PE.auto) { PE.items = []; PE.auto = false; }
+        PE.name = '';
+        nameIn.value = '';
+        PE.sug = '';
+        nameIn.focus();
+      }
+      renderPE();
+    }));
+    $('#peList').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const mid = b.closest('li').dataset.mid;
+      const i = PE.items.indexOf(mid);
+      if (i < 0) return;
+      if (b.dataset.mv) {
+        const j = i + +b.dataset.mv;
+        if (j < 0 || j >= PE.items.length) return;
+        [PE.items[i], PE.items[j]] = [PE.items[j], PE.items[i]];
+      } else if (b.dataset.rm) {
+        PE.items.splice(i, 1);
+      }
+      PE.auto = false;
+      renderPE();
+      const again = b.dataset.mv && $(`#peList li[data-mid="${mid}"] button[data-mv="${b.dataset.mv}"]`);
+      if (again && !again.disabled) again.focus();
+    });
+    $('#pePick').addEventListener('click', e => {
+      const b = e.target.closest('.pk-row');
+      if (!b) return;
+      const i = PE.items.indexOf(b.dataset.mid);
+      if (i >= 0) PE.items.splice(i, 1); else PE.items.push(b.dataset.mid);
+      PE.auto = false;
+      renderPE();
+    });
+    $('#peQ').addEventListener('input', e => {
+      const v = norm(e.target.value);
+      $$('#pePick .pk').forEach(d => {
+        let hits = 0;
+        $$('.pk-row', d).forEach(r => {
+          const m = mById(r.dataset.mid);
+          const ok = !v || norm(m.n).includes(v) || (!!m.e && m.e.toLowerCase().includes(v));
+          r.hidden = !ok;
+          if (ok) hits++;
+        });
+        d.hidden = !!v && !hits;
+        if (v) d.open = hits > 0;
+      });
+    });
+    $('#peSave').addEventListener('click', () => {
+      const name = String(PE.name || '').trim().slice(0, 30);
+      const items = PE.items.filter(x => mById(x));
+      if (!name) { toast(tr('اكتب اسم الجدول.', 'Type a plan name.')); nameIn.focus(); return; }
+      if (!items.length) { toast(tr('اختر جهاز واحد على الأقل.', 'Pick at least one machine.')); return; }
+      let pl = PE.id ? planById(PE.id) : null;
+      const isNew = !pl;
+      const before = pl ? { name: pl.name, items: pl.items } : null;
+      if (pl) Object.assign(pl, { name, items });
+      else { pl = { id: 'p-' + uid(), name, items, t: Date.now() }; S.plans.push(pl); }
+      if (!save()) { if (isNew) S.plans.pop(); else Object.assign(pl, before); return; }
+      location.hash = '#/plan/' + pl.id;
+      toast(tr('انحفظ الجدول.', 'Plan saved.'));
+    });
+    if (p) $('#peDel').addEventListener('click', () => {
+      if (!confirm(tr(`تحذف جدول «${p.name}»؟ تسجيلاتك تبقى في السجل.`, `Delete the "${p.name}" plan? Your entries stay in the log.`))) return;
+      S.plans = S.plans.filter(x => x.id !== p.id);
+      save();
+      location.hash = '#/plan';
+      toast(tr('انحذف الجدول.', 'Plan deleted.'));
+    });
+  }
+
   /* ---------- السجل ---------- */
   function viewLog() {
     const ls = S.logs.slice().sort((a, b) => b.t - a.t);
@@ -1162,6 +1477,8 @@
         inc.custom[k].forEach(x => { if (!have.has(x.id)) S.custom[k].push(x); });
       });
       inc.hidden.forEach(h => { if (!S.hidden.includes(h)) S.hidden.push(h); });
+      const haveP = new Set(S.plans.map(x => x.id));
+      inc.plans.forEach(x => { if (!haveP.has(x.id)) S.plans.push(x); });
       if (!S.name && inc.name) S.name = inc.name;
       const haveB = new Set(S.body.map(x => dayKey(x.t)));
       inc.body.forEach(x => { if (!haveB.has(dayKey(x.t))) S.body.push(x); });
@@ -1276,6 +1593,7 @@
       const m = mById(curM);
       if (!confirm(tr(`تحذف «${m.n}»؟ تسجيلاته القديمة تبقى في السجل.`, `Delete "${mName(m)}"? Its old entries stay in the log.`))) return;
       S.custom.machines = S.custom.machines.filter(x => x.id !== m.id);
+      S.plans.forEach(pl => { pl.items = pl.items.filter(x => x !== m.id); });
       save();
       location.hash = '#/s/' + m.s;
       toast(tr('انحذف الجهاز.', 'Machine deleted.'));
@@ -1283,7 +1601,9 @@
       const sec = secById(curSec);
       if (!confirm(tr(`تحذف قسم «${sec.name}»؟ الأجهزة اللي أضفتها فيه تنحذف، وتسجيلاتها تبقى في السجل.`, `Delete the "${secName(sec)}" section? Machines you added to it are deleted; their entries stay in the log.`))) return;
       S.custom.sections = S.custom.sections.filter(x => x.id !== sec.id);
+      const gone = new Set(S.custom.machines.filter(x => x.s === sec.id).map(x => x.id));
       S.custom.machines = S.custom.machines.filter(x => x.s !== sec.id);
+      S.plans.forEach(pl => { pl.items = pl.items.filter(x => !gone.has(x)); });
       save();
       location.hash = '#/';
       toast(tr('انحذف القسم.', 'Section deleted.'));
