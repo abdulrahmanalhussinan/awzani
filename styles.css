@@ -260,6 +260,42 @@ svg { flex: none; }
 .mrow-l em { font-style: normal; color: var(--muted); margin-inline-start: 8px; font-size: 12.5px; }
 .mrow > svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+/* ---------- صور الأجهزة ---------- */
+.thumb {
+  width: 60px; height: 60px; flex: none; display: block;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--line);
+}
+.thumb-plate {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, #1A1F22 0 12%, var(--hub) 12% 26%, #78838A 26% 29%, transparent 29% 84%, rgba(0, 0, 0, .2) 84% 88%, rgba(0, 0, 0, .08) 88% 100%, transparent 100%),
+    var(--pc);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .14);
+  transform: scale(.86);
+}
+.demo-frames { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: #111; }
+.demo-frames img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.demo-frames .f2 { animation: demo-swap 2.4s steps(1, end) infinite; }
+@keyframes demo-swap { 0% { opacity: 0; } 50% { opacity: 1; } }
+.mhead.has-photo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.mphoto {
+  border: 0; padding: 0; background: none; cursor: pointer;
+  width: clamp(112px, 34vw, 150px);
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.mphoto:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.viewer .demo-frames { border-radius: 16px; }
+.viewer-cap { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+.ghost.wide { width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .mphoto .f2 { display: none; }
+  .viewer .demo-frames { aspect-ratio: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: none; }
+  .viewer .demo-frames img { position: static; aspect-ratio: 4 / 3; border-radius: 10px; }
+}
+
 /* ---------- رأس القسم والجهاز ---------- */
 .back {
   display: inline-flex; align-items: center; gap: 4px;

@@ -106,5 +106,7 @@ window.AWZ_DATA = {
     { id: 'stairs',           s: 'cardio', n: 'درج (ستير ماستر)',     e: 'Stair Climber',            k: 'c', lv: 'المستوى' },
     { id: 'rower',            s: 'cardio', n: 'تجديف',                e: 'Rowing Machine',           k: 'c', lv: 'المستوى' },
     { id: 'jump-rope',        s: 'cardio', n: 'نط الحبل',             e: 'Jump Rope',                k: 'c' }
-  ]
+  ],
+  // صور التمارين: free-exercise-db (ملكية عامة، Unlicense) — img/<id>-t.webp و -0 و -1
+  photos: ["ab-crunch-mc", "ab-wheel", "abductor", "adductor", "arnold", "back-ext", "bench-bar", "bench-db", "bike", "bulgarian", "cable-cross", "cable-crunch", "cable-row", "calf-seated", "calf-standing", "chest-press", "concentration", "crunch", "curl-bar", "curl-cable", "curl-db", "deadlift", "decline-bar", "dips", "elliptical", "face-pull", "fly-db", "front-raise", "goblet", "hack-squat", "hammer", "high-row", "hip-thrust", "incline-bar", "incline-db", "incline-press-mc", "jump-rope", "kickback", "lat-pulldown", "lateral-cable", "lateral-db", "leg-curl-lying", "leg-curl-seated", "leg-ext", "leg-press", "leg-raise", "lunges-db", "ohp", "overhead-tri", "pec-deck", "plank", "preacher-mc", "pullup", "pushdown", "pushup", "rdl", "rear-delt", "row-bar", "row-db", "rower", "russian-twist", "seated-row-mc", "shoulder-press-db", "shoulder-press-mc", "shrugs", "skull", "smith-bench", "smith-squat", "squat-bar", "stairs", "straight-arm", "tbar-row", "treadmill", "tri-dip-mc", "upright-row", "wrist-curl"]
 };

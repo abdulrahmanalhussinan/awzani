@@ -183,6 +183,14 @@
   const inSection = id => machines().filter(m => m.s === id && !S.hidden.includes(m.id));
   const logsOf = mid => S.logs.filter(l => l.m === mid).sort((a, b) => b.t - a.t);
   const lastLog = mid => logsOf(mid)[0] || null;
+  const PHOTOS = new Set(D.photos || []);
+  const hasPhoto = m => m && PHOTOS.has(m.id);
+  function thumb(m, color) {
+    return hasPhoto(m)
+      ? `<img class="thumb" src="img/${esc(m.id)}-t.webp" alt="" width="60" height="60" loading="lazy" decoding="async">`
+      : `<span class="thumb thumb-plate c-${esc(color || secColor(m.s))}" aria-hidden="true"></span>`;
+  }
+  const frames = (m, alt) => `<span class="demo-frames"><img src="img/${esc(m.id)}-0.webp" alt="${esc(alt)}" width="600" height="450" decoding="async"><img class="f2" src="img/${esc(m.id)}-1.webp" alt="" width="600" height="450" decoding="async"></span>`;
   const unitOf = (m, last) => S.prefs.mu[m.id] || (last && last.u) || S.prefs.unit;
 
   function stepOf(m, u) {
@@ -309,6 +317,8 @@
     const parts = location.hash.replace(/^#\/?/, '').split('/');
     const v = parts[0], id = decodeURIComponent(parts[1] || '');
     curSec = curM = null;
+    const sheet = $('#sheet');
+    if (sheet && sheet.open) sheet.close();
     window.scrollTo(0, 0);
     document.body.classList.toggle('is-start', !S.name);
     if (!S.name) return viewStart();
@@ -428,7 +438,7 @@
   function mRow(m) {
     const l = lastLog(m.id);
     return `<a class="mrow" href="#/m/${esc(m.id)}">
-      <span class="dot c-${esc(secColor(m.s))}" aria-hidden="true"></span>
+      ${thumb(m)}
       <span class="mrow-t">
         <b>${esc(m.n)}</b>
         ${m.e ? `<small><bdi dir="ltr">${esc(m.e)}</bdi></small>` : ''}
@@ -633,9 +643,12 @@
     const tipText = today ? 'سجلت هالجهاز اليوم. لو بتسجل جولة ثانية عدّل الأرقام واضغط سجّل.' : sug.text;
     app.innerHTML = `
       <a class="back" href="${sec ? '#/s/' + esc(sec.id) : '#/'}">${I.back}${esc(sec ? sec.name : 'الأقسام')}</a>
-      <header class="mhead">
-        <h1>${esc(m.n)}</h1>
-        ${m.e ? `<p class="en"><bdi dir="ltr">${esc(m.e)}</bdi></p>` : ''}
+      <header class="mhead${hasPhoto(m) ? ' has-photo' : ''}">
+        <div class="mhead-t">
+          <h1>${esc(m.n)}</h1>
+          ${m.e ? `<p class="en"><bdi dir="ltr">${esc(m.e)}</bdi></p>` : ''}
+        </div>
+        ${hasPhoto(m) ? `<button type="button" class="mphoto" data-act="photo" aria-label="كبّر صورة ${esc(m.n)}">${frames(m, 'صورة ' + m.n)}</button>` : ''}
       </header>
       <div class="tip">
         ${last ? `<p class="tip-last"><span>آخر مرة، ${rel(last.t)}</span><b>${esc(summary(last))}</b></p>` : ''}
@@ -964,7 +977,7 @@
             const name = m ? m.n : (l.n || 'جهاز محذوف');
             const col = m ? secColor(m.s) : 'steel';
             return `<a class="mrow" href="${m ? '#/m/' + esc(m.id) : '#/log'}">
-              <span class="dot c-${esc(col)}" aria-hidden="true"></span>
+              ${m ? thumb(m) : `<span class="thumb thumb-plate c-${esc(col)}" aria-hidden="true"></span>`}
               <span class="mrow-t"><b>${esc(name)}</b><span class="mrow-l">${esc(summary(l))}</span></span>
               ${I.chev}
             </a>`;
@@ -1023,6 +1036,7 @@
       <section class="card">
         <h2>عن أوزاني</h2>
         <p>${plural(D.machines.length, W.mc)} في ${plural(D.sections.length, ['قسم واحد', 'قسمين', 'أقسام', 'قسم'])}، وتقدر تضيف أجهزة وأقسام نادك. الاقتراح يمشي على قاعدة بسيطة: لما توصل 12 عدة بكل الجلسات زِد الوزن، وارجع لـ 8 عدات.</p>
+        <p class="note">صور التمارين من مجموعة <bdi dir="ltr">free-exercise-db</bdi> المفتوحة، وهي ملكية عامة.</p>
         <button type="button" class="text-btn danger" id="wipe">امسح كل بياناتي</button>
       </section>`;
 
@@ -1110,6 +1124,18 @@
     const first = $('input[type=text]', d);
     if (first) setTimeout(() => first.focus(), 60);
   }
+  function openPhoto(m) {
+    if (!hasPhoto(m)) return;
+    const d = $('#sheet');
+    d.innerHTML = `<div class="sheet viewer">
+      <h2>${esc(m.n)}</h2>
+      ${frames(m, 'صورة توضيحية لتمرين ' + m.n)}
+      <p class="viewer-cap">الصورتين توضح بداية الحركة ونهايتها.</p>
+      <button class="ghost wide" type="button" data-close>إغلاق</button>
+    </div>`;
+    $('[data-close]', d).addEventListener('click', () => d.close());
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  }
   const KIND_OPTS = [
     ['w:mc', 'وزن على جهاز'], ['w:bar', 'بار وأقراص'], ['w:db', 'دمبل'], ['w:cb', 'كيبل'],
     ['w:pl', 'جهاز تركّب فيه أقراص'], ['bw', 'وزن الجسم'], ['t', 'وقت بالثواني'], ['c', 'كارديو بالدقائق']
@@ -1156,6 +1182,7 @@
     const act = a.dataset.act;
     if (act === 'add-sec') addSectionSheet();
     else if (act === 'body') bodySheet();
+    else if (act === 'photo') openPhoto(mById(curM));
     else if (act === 'add-m') addMachineSheet(curSec);
     else if (act === 'del-log') {
       if (!confirm('تحذف هالتسجيل؟')) return;
