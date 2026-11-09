@@ -1,5 +1,5 @@
 /* أوزاني: يشتغل بدون نت بعد أول فتح */
-const V = 'awzani-v1';
+const V = 'awzani-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'data.js', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

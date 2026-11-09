@@ -18,7 +18,6 @@
   const fmt = n => nf.format(round2(+n || 0));
   const fmtIn = n => String(round2(+n || 0));
   const unitName = u => (u === 'lb' ? 'رطل' : 'كجم');
-  const toKg = (w, u) => (u === 'lb' ? w * LB : w);
   const conv = (w, from, to) => (from === to ? w : to === 'kg' ? w * LB : w / LB);
   const e1rm = (w, r) => (r <= 1 ? w : w * (1 + r / 30));
   function num(v) {
@@ -40,8 +39,11 @@
     min: ['دقيقة وحدة', 'دقيقتين', 'دقائق', 'دقيقة'],
     sec: ['ثانية وحدة', 'ثانيتين', 'ثواني', 'ثانية'],
     day: ['يوم واحد', 'يومين', 'أيام', 'يوم'],
-    log: ['تسجيل واحد', 'تسجيلين', 'تسجيلات', 'تسجيل']
+    log: ['تسجيل واحد', 'تسجيلين', 'تسجيلات', 'تسجيل'],
+    ex: ['تمرين واحد', 'تمرينين', 'تمارين', 'تمرين']
   };
+  // الكلمة بدون الرقم: 1 تمرين، 2 تمرينين، 3-10 تمارين، 11+ تمرين
+  const exWord = n => (n === 2 ? 'تمرينين' : n >= 3 && n <= 10 ? 'تمارين' : 'تمرين');
   function plural(n, f) {
     n = round2(+n || 0);
     if (n === 1) return f[0];
@@ -61,6 +63,7 @@
   const LOC = 'ar-SA-u-ca-gregory-nu-latn';
   const dfDay = new Intl.DateTimeFormat(LOC, { weekday: 'long', day: 'numeric', month: 'long' });
   const dfDate = new Intl.DateTimeFormat(LOC, { day: 'numeric', month: 'long', year: 'numeric' });
+  const dfWeek = new Intl.DateTimeFormat(LOC, { weekday: 'long' });
   const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
   const daysAgo = t => Math.round((startOfDay(Date.now()) - startOfDay(t)) / 864e5);
   const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
@@ -81,7 +84,7 @@
   const okStr = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max;
 
   function blank() {
-    return { v: 1, logs: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', mu: {}, step: {} } };
+    return { v: 1, name: '', body: [], logs: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', mu: {}, step: {} } };
   }
   function cleanSets(sets, k) {
     if (!Array.isArray(sets)) return null;
@@ -121,6 +124,13 @@
       });
     }
     b.hidden = Array.isArray(o.hidden) ? o.hidden.filter(okId) : [];
+    if (okStr(o.name, 40)) b.name = o.name.trim().slice(0, 24);
+    if (Array.isArray(o.body)) {
+      o.body.forEach(x => {
+        if (x && isFinite(+x.t) && +x.w > 0 && +x.w < 700) b.body.push({ t: +x.t, w: round2(+x.w), u: x.u === 'lb' ? 'lb' : 'kg' });
+      });
+      b.body.sort((a, z) => a.t - z.t);
+    }
     if (o.prefs) {
       b.prefs.unit = o.prefs.unit === 'lb' ? 'lb' : 'kg';
       Object.entries(o.prefs.mu || {}).forEach(([k, v]) => { if (okId(k)) b.prefs.mu[k] = v === 'lb' ? 'lb' : 'kg'; });
@@ -204,7 +214,6 @@
     if (!l.sets || l.k === 't' || l.k === 'c') return 0;
     return l.sets.reduce((a, s) => a + (+s.w || 0) * (+s.r || 0), 0);
   }
-  const volKg = l => toKg(volU(l), l.u);
   function summary(l) {
     if (l.k === 'c') {
       const p = [plural(l.min, W.min)];
@@ -301,6 +310,8 @@
     const v = parts[0], id = decodeURIComponent(parts[1] || '');
     curSec = curM = null;
     window.scrollTo(0, 0);
+    document.body.classList.toggle('is-start', !S.name);
+    if (!S.name) return viewStart();
     if (v === 's' && secById(id)) { setNav('home'); return viewSection(id); }
     if (v === 'm' && mById(id)) { setNav('home'); return viewMachine(id); }
     if (v === 'log') { setNav('log'); return viewLog(); }
@@ -314,11 +325,87 @@
     const t0 = startOfDay(Date.now());
     const ls = S.logs.filter(l => l.t >= t0);
     return {
-      kg: ls.reduce((a, l) => a + volKg(l), 0),
-      machines: new Set(ls.map(l => l.m)).size,
+      ex: new Set(ls.map(l => l.m)).size,
       sets: ls.reduce((a, l) => a + (l.sets ? l.sets.length : 0), 0),
+      reps: ls.reduce((a, l) => a + (l.k === 'w' || l.k === 'bw' ? l.sets.reduce((x, s) => x + (+s.r || 0), 0) : 0), 0),
       min: ls.reduce((a, l) => a + (l.k === 'c' ? (+l.min || 0) : 0), 0)
     };
+  }
+
+  /* ---------- البداية: الاسم ---------- */
+  function viewStart() {
+    app.innerHTML = `
+      <section class="start">
+        <div class="start-board">
+          <h1 class="mark led">أوزاني</h1>
+          <p>حسبة أوزانك في النادي، بدون اشتراك</p>
+        </div>
+        <form id="startForm" class="start-form" novalidate>
+          <label class="fld"><span>وش اسمك؟</span>
+            <input type="text" name="name" maxlength="24" placeholder="اكتب اسمك" autocomplete="given-name" enterkeyhint="go" required>
+          </label>
+          <button class="go" type="submit"><span>ابدأ</span></button>
+          <p class="start-note">اسمك وتمارينك تنحفظ في جوالك بس.</p>
+        </form>
+        <label class="text-btn start-restore">عندك نسخة احتياطية من جوال ثاني؟ رجّعها<input type="file" id="imp" accept=".json,application/json" hidden></label>
+      </section>`;
+    $('#imp').addEventListener('change', importData);
+    const f = $('#startForm');
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const n = String(new FormData(f).get('name') || '').trim();
+      if (!n) { toast('اكتب اسمك عشان نبدأ.'); $('input', f).focus(); return; }
+      S.name = n.slice(0, 24);
+      if (!save()) return;
+      location.hash = '#/';
+      route();
+    });
+  }
+
+  /* ---------- وزن الجسم ---------- */
+  const lastBody = () => S.body[S.body.length - 1] || null;
+  function bodySheet() {
+    const last = lastBody();
+    let u = last ? last.u : S.prefs.unit;
+    let w = last ? last.w : (u === 'lb' ? 160 : 75);
+    const recent = S.body.slice(-6).reverse();
+    openSheet(`
+      <h2>وزن جسمك اليوم</h2>
+      <div class="bw-row">
+        <button type="button" class="stp sm" data-bw="0.5" aria-label="زِد نص">${I.plus}</button>
+        <input class="cnt-v" id="bwIn" name="w" type="text" inputmode="decimal" autocomplete="off" value="${fmtIn(w)}" aria-label="وزن الجسم">
+        <button type="button" class="stp sm" data-bw="-0.5" aria-label="أنقص نص">${I.minus}</button>
+      </div>
+      <div class="seg light bw-seg" role="group" aria-label="الوحدة">
+        <button type="button" data-bu="kg" aria-pressed="${u === 'kg'}">كيلو</button>
+        <button type="button" data-bu="lb" aria-pressed="${u === 'lb'}">رطل</button>
+      </div>
+      ${recent.length ? `<h3 class="bw-h">آخر القياسات</h3><ul class="plain bw-list">${recent.map((x, i) => {
+        const prev = recent[i + 1];
+        const d = prev && prev.u === x.u ? round2(x.w - prev.w) : 0;
+        return `<li><span>${dfDay.format(new Date(x.t))}</span><span><b class="nw">${fmt(x.w)}</b> ${unitName(x.u)}${d ? ` <em class="delta">${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</em>` : ''}</span></li>`;
+      }).join('')}</ul>` : ''}`, fd => {
+      const v = num(fd.get('w'));
+      if (!(v > 20 && v < 700)) { toast('اكتب وزنك صح.'); return false; }
+      const t0 = startOfDay(Date.now());
+      S.body = S.body.filter(x => x.t < t0);
+      S.body.push({ t: Date.now(), w: round2(v), u });
+      if (!save()) return false;
+      toast(`انحفظ وزنك: ${fmt(v)} ${unitName(u)}.`);
+      route();
+    }, 'احفظ');
+    const d = $('#sheet');
+    $('form', d).addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.bw) {
+        const inp = $('#bwIn');
+        inp.value = fmtIn(Math.max(0, round2(num(inp.value) + +b.dataset.bw)));
+      } else if (b.dataset.bu) {
+        u = b.dataset.bu;
+        $$('[data-bu]', d).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.bu === u)));
+      }
+    });
   }
   function recentMachines(n) {
     const seen = new Set(), out = [];
@@ -351,23 +438,32 @@
     </a>`;
   }
 
-  let firstHome = true;
   function viewHome() {
     const t = todayStats();
     const recent = recentMachines(6);
+    const now = new Date();
+    const bw = lastBody();
+    const bwToday = bw && daysAgo(bw.t) === 0;
+    const cells = [
+      `<div><span class="led">${fmt(t.sets)}</span><span>مجموع الجلسات</span></div>`,
+      `<div><span class="led">${fmt(t.reps)}</span><span>مجموع العدات</span></div>`
+    ];
+    if (t.min) cells.push(`<div><span class="led">${fmt(t.min)}</span><span>دقائق الكارديو</span></div>`);
+    cells.push(`<button type="button" class="bw-cell" data-act="body" aria-label="وزن الجسم، اضغط وسجّله">
+      <span class="led${bw ? '' : ' dim'}">${bw ? fmt(bw.w) : '—'}</span>
+      <span>وزن الجسم${bw ? ` (${unitName(bw.u)})` : ''}<em>${bw ? (bwToday ? 'اليوم' : rel(bw.t)) : 'اضغط وسجّله'}</em></span>
+    </button>`);
     app.innerHTML = `
-      <header class="top">
-        <h1 class="mark">أوزاني</h1>
-        <p class="tag">سجّل وزنك وعداتك وجلساتك على أجهزة النادي. بدون اشتراك، وكل شي محفوظ في جوالك.</p>
+      <header class="top today-head">
+        <p class="brand">أوزاني</p>
+        <p class="hello">هلا ${esc(S.name)}</p>
+        <h1 class="day">${dfWeek.format(now)}</h1>
+        <p class="date">${dfDate.format(now)}</p>
       </header>
       <section class="board" aria-label="تمرين اليوم">
-        <div class="board-top"><span>مجموع اللي رفعته اليوم</span><span>${dfDay.format(new Date())}</span></div>
-        <div class="board-main"><span class="led led-xl" id="bigKg" data-v="${Math.round(t.kg)}">${fmt(Math.round(t.kg))}</span><span class="board-u">كجم</span></div>
-        <div class="board-cells">
-          <div><span class="led">${t.machines}</span><span>الأجهزة</span></div>
-          <div><span class="led">${t.sets}</span><span>الجلسات</span></div>
-          <div><span class="led">${fmt(t.min)}</span><span>دقائق الكارديو</span></div>
-        </div>
+        <div class="board-top"><span>تمارين خلصتها اليوم</span></div>
+        <div class="board-main"><span class="led led-xl" id="bigEx" data-v="${t.ex}">${t.ex}</span><span class="board-u">${t.ex ? exWord(t.ex) : 'ما بديت للحين'}</span></div>
+        <div class="board-cells" style="--n:${cells.length}">${cells.join('')}</div>
       </section>
       <label class="search">${I.search}<input id="q" type="search" placeholder="ابحث عن جهاز، مثل: تشيست برس" autocomplete="off" enterkeyhint="search" aria-label="ابحث عن جهاز"></label>
       <div id="results" class="mlist" hidden></div>
@@ -393,17 +489,6 @@
       body.hidden = true;
     });
 
-    if (firstHome && t.kg > 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches) countUp($('#bigKg'));
-    firstHome = false;
-  }
-  function countUp(el) {
-    const end = +el.dataset.v, t0 = performance.now(), dur = 700;
-    const tick = now => {
-      const p = Math.min(1, (now - t0) / dur);
-      el.textContent = fmt(Math.round(end * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
   }
 
   /* ---------- القسم ---------- */
@@ -871,9 +956,9 @@
       </section>
       ${!ls.length ? '<p class="empty spaced">ما سجلت شي للحين. أول جهاز تسجله يطلع هنا مرتب حسب اليوم.</p>' : ''}
       ${groups.map(g => {
-        const kg = g.items.reduce((a, l) => a + volKg(l), 0);
+        const exN = new Set(g.items.map(l => l.m)).size;
         return `<section class="day">
-          <h2 class="day-h"><span>${dfDay.format(new Date(g.t))}${daysAgo(g.t) <= 1 ? ` <em>${rel(g.t)}</em>` : ''}</span>${kg ? `<span class="kg"><b>${fmt(Math.round(kg))}</b> كجم</span>` : ''}</h2>
+          <h2 class="day-h"><span>${dfDay.format(new Date(g.t))}${daysAgo(g.t) <= 1 ? ` <em>${rel(g.t)}</em>` : ''}</span><span class="kg">${numWord(exN, W.ex)}</span></h2>
           <div class="mlist">${g.items.map(l => {
             const m = mById(l.m);
             const name = m ? m.n : (l.n || 'جهاز محذوف');
@@ -901,6 +986,18 @@
     const hidden = S.hidden.map(mById).filter(Boolean);
     app.innerHTML = `
       <header class="top small"><h1 class="title">الإعدادات</h1></header>
+      <section class="card">
+        <h2>اسمك</h2>
+        <form class="name-row" id="nameForm" novalidate>
+          <input type="text" name="name" maxlength="24" value="${esc(S.name)}" aria-label="اسمك" autocomplete="given-name">
+          <button type="submit" class="btn">احفظ</button>
+        </form>
+      </section>
+      <section class="card">
+        <h2>وزن الجسم</h2>
+        <p>${lastBody() ? `آخر قياس ${fmt(lastBody().w)} ${unitName(lastBody().u)}، ${rel(lastBody().t)}.` : 'ما سجلت وزنك للحين.'}</p>
+        <button type="button" class="btn" data-act="body">سجّل وزنك اليوم</button>
+      </section>
       <section class="card">
         <h2>الوحدة للأجهزة الجديدة</h2>
         <p>كل جهاز يحفظ وحدته لحاله، فتقدر تخلي جهاز بالرطل وجهاز بالكيلو.</p>
@@ -935,6 +1032,13 @@
       $$('[data-unit]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.unit === S.prefs.unit)));
       toast(`الأجهزة الجديدة صارت بال${S.prefs.unit === 'lb' ? 'رطل' : 'كيلو'}.`);
     }));
+    $('#nameForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const n = String(new FormData(e.target).get('name') || '').trim();
+      if (!n) { toast('اكتب اسمك.'); return; }
+      S.name = n.slice(0, 24);
+      if (save()) toast(`تمام يا ${S.name}، انحفظ اسمك.`);
+    });
     $('#exp').addEventListener('click', exportData);
     $('#imp').addEventListener('change', importData);
     $('#install').addEventListener('click', async () => {
@@ -977,19 +1081,24 @@
         inc.custom[k].forEach(x => { if (!have.has(x.id)) S.custom[k].push(x); });
       });
       inc.hidden.forEach(h => { if (!S.hidden.includes(h)) S.hidden.push(h); });
+      if (!S.name && inc.name) S.name = inc.name;
+      const haveB = new Set(S.body.map(x => dayKey(x.t)));
+      inc.body.forEach(x => { if (!haveB.has(dayKey(x.t))) S.body.push(x); });
+      S.body.sort((a, z) => a.t - z.t);
       Object.assign(S.prefs.mu, inc.prefs.mu);
       Object.assign(S.prefs.step, inc.prefs.step);
       if (save()) toast(added ? `رجعت ${plural(added, W.log)}.` : 'كل اللي في النسخة موجود عندك من قبل.');
-      viewSettings();
+      route();
     };
     rd.readAsText(file);
   }
 
   /* ---------- النوافذ (إضافة جهاز / قسم) ---------- */
-  function openSheet(inner, onOk) {
+  $('#sheet').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  function openSheet(inner, onOk, okLabel) {
     const d = $('#sheet');
     d.innerHTML = `<form class="sheet" novalidate>${inner}
-      <div class="sheet-act"><button class="go" type="submit">${I.plus}<span>أضف</span></button><button class="ghost" type="button" data-close>إلغاء</button></div>
+      <div class="sheet-act"><button class="go" type="submit">${okLabel ? I.check : I.plus}<span>${okLabel || 'أضف'}</span></button><button class="ghost" type="button" data-close>إلغاء</button></div>
     </form>`;
     const form = $('form', d);
     form.addEventListener('submit', e => {
@@ -997,7 +1106,6 @@
       if (onOk(new FormData(form)) !== false) d.close();
     });
     $('[data-close]', d).addEventListener('click', () => d.close());
-    d.addEventListener('click', e => { if (e.target === d) d.close(); }, { once: true });
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
     const first = $('input[type=text]', d);
     if (first) setTimeout(() => first.focus(), 60);
@@ -1047,6 +1155,7 @@
     if (!a) return;
     const act = a.dataset.act;
     if (act === 'add-sec') addSectionSheet();
+    else if (act === 'body') bodySheet();
     else if (act === 'add-m') addMachineSheet(curSec);
     else if (act === 'del-log') {
       if (!confirm('تحذف هالتسجيل؟')) return;
