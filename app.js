@@ -1,4 +1,4 @@
-/* أوزاني — تسجيل أوزان النادي بدون اشتراك. كل البيانات في localStorage على جهاز المستخدم. */
+/* أوزاني — تسجيل أوزان النادي بدون اشتراك. كل البيانات في localStorage على جهاز المستخدم. عربي / English */
 (() => {
   'use strict';
 
@@ -9,6 +9,10 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const app = $('#app');
 
+  /* ---------- اللغة ---------- */
+  let EN = false;
+  const tr = (ar, en) => (EN ? en : ar);
+
   /* ---------- أدوات صغيرة ---------- */
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-5);
@@ -17,9 +21,10 @@
   const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
   const fmt = n => nf.format(round2(+n || 0));
   const fmtIn = n => String(round2(+n || 0));
-  const unitName = u => (u === 'lb' ? 'رطل' : 'كجم');
+  const unitName = u => (u === 'lb' ? tr('رطل', 'lb') : tr('كجم', 'kg'));
   const conv = (w, from, to) => (from === to ? w : to === 'kg' ? w * LB : w / LB);
   const e1rm = (w, r) => (r <= 1 ? w : w * (1 + r / 30));
+  const SEP = () => tr('، ', ', ');
   function num(v) {
     v = String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[٫,،]/g, '.').replace(/[^\d.]/g, '');
     const n = parseFloat(v);
@@ -32,27 +37,31 @@
       .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/[()]/g, ' ')
       .replace(/\s+/g, ' ').trim();
   }
+  // [العربي: واحد، اثنين، 3-10، 11+] و [English: one, many]
   const W = {
-    set: ['جلسة وحدة', 'جلستين', 'جلسات', 'جلسة'],
-    rep: ['عدة وحدة', 'عدتين', 'عدات', 'عدة'],
-    mc: ['جهاز واحد', 'جهازين', 'أجهزة', 'جهاز'],
-    min: ['دقيقة وحدة', 'دقيقتين', 'دقائق', 'دقيقة'],
-    sec: ['ثانية وحدة', 'ثانيتين', 'ثواني', 'ثانية'],
-    day: ['يوم واحد', 'يومين', 'أيام', 'يوم'],
-    log: ['تسجيل واحد', 'تسجيلين', 'تسجيلات', 'تسجيل'],
-    ex: ['تمرين واحد', 'تمرينين', 'تمارين', 'تمرين']
+    set: [['جلسة وحدة', 'جلستين', 'جلسات', 'جلسة'], ['set', 'sets']],
+    rep: [['عدة وحدة', 'عدتين', 'عدات', 'عدة'], ['rep', 'reps']],
+    mc: [['جهاز واحد', 'جهازين', 'أجهزة', 'جهاز'], ['machine', 'machines']],
+    min: [['دقيقة وحدة', 'دقيقتين', 'دقائق', 'دقيقة'], ['min', 'min']],
+    sec: [['ثانية وحدة', 'ثانيتين', 'ثواني', 'ثانية'], ['sec', 'sec']],
+    day: [['يوم واحد', 'يومين', 'أيام', 'يوم'], ['day', 'days']],
+    log: [['تسجيل واحد', 'تسجيلين', 'تسجيلات', 'تسجيل'], ['entry', 'entries']],
+    ex: [['تمرين واحد', 'تمرينين', 'تمارين', 'تمرين'], ['exercise', 'exercises']],
+    sc: [['قسم واحد', 'قسمين', 'أقسام', 'قسم'], ['section', 'sections']]
   };
   // الكلمة بدون الرقم: 1 تمرين، 2 تمرينين، 3-10 تمارين، 11+ تمرين
-  const exWord = n => (n === 2 ? 'تمرينين' : n >= 3 && n <= 10 ? 'تمارين' : 'تمرين');
+  const exWord = n => (EN ? (n === 1 ? 'exercise' : 'exercises') : n === 2 ? 'تمرينين' : n >= 3 && n <= 10 ? 'تمارين' : 'تمرين');
   function plural(n, f) {
     n = round2(+n || 0);
-    if (n === 1) return f[0];
-    if (n === 2) return f[1];
-    if (n >= 3 && n <= 10 && Number.isInteger(n)) return `${n} ${f[2]}`;
-    return `${fmt(n)} ${f[3]}`;
+    if (EN) return `${fmt(n)} ${n === 1 ? f[1][0] : f[1][1]}`;
+    const a = f[0];
+    if (n === 1) return a[0];
+    if (n === 2) return a[1];
+    if (n >= 3 && n <= 10 && Number.isInteger(n)) return `${n} ${a[2]}`;
+    return `${fmt(n)} ${a[3]}`;
   }
 
-  // رقم بخط الساعة + الكلمة بالخط العادي (1 و2 تبقى كلمات)
+  // رقم بخط الساعة + الكلمة بالخط العادي (1 و2 بالعربي تبقى كلمات)
   function numWord(n, f) {
     const t = plural(n, f);
     const m = t.match(/^([\d,.]+) (.+)$/);
@@ -60,21 +69,25 @@
   }
 
   /* ---------- التواريخ ---------- */
-  const LOC = 'ar-SA-u-ca-gregory-nu-latn';
-  const dfDay = new Intl.DateTimeFormat(LOC, { weekday: 'long', day: 'numeric', month: 'long' });
-  const dfDate = new Intl.DateTimeFormat(LOC, { day: 'numeric', month: 'long', year: 'numeric' });
-  const dfWeek = new Intl.DateTimeFormat(LOC, { weekday: 'long' });
+  let dfDay, dfDate, dfWeek;
+  function setLocale() {
+    const L = EN ? 'en-GB' : 'ar-SA-u-ca-gregory-nu-latn';
+    dfDay = new Intl.DateTimeFormat(L, { weekday: 'long', day: 'numeric', month: 'long' });
+    dfDate = new Intl.DateTimeFormat(L, { day: 'numeric', month: 'long', year: 'numeric' });
+    dfWeek = new Intl.DateTimeFormat(L, { weekday: 'long' });
+  }
   const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
   const daysAgo = t => Math.round((startOfDay(Date.now()) - startOfDay(t)) / 864e5);
   const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
   function rel(t) {
     const n = daysAgo(t);
-    if (n <= 0) return 'اليوم';
-    if (n === 1) return 'أمس';
+    if (n <= 0) return tr('اليوم', 'today');
+    if (n === 1) return tr('أمس', 'yesterday');
+    if (n > 30) return dfDate.format(new Date(t));
+    if (EN) return `${n} days ago`;
     if (n === 2) return 'قبل يومين';
     if (n <= 10) return `قبل ${n} أيام`;
-    if (n <= 30) return `قبل ${n} يوم`;
-    return dfDate.format(new Date(t));
+    return `قبل ${n} يوم`;
   }
 
   /* ---------- التخزين ---------- */
@@ -84,7 +97,7 @@
   const okStr = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max;
 
   function blank() {
-    return { v: 1, name: '', body: [], logs: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', mu: {}, step: {} } };
+    return { v: 1, name: '', body: [], logs: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', lang: 'ar', mu: {}, step: {} } };
   }
   function cleanSets(sets, k) {
     if (!Array.isArray(sets)) return null;
@@ -133,6 +146,7 @@
     }
     if (o.prefs) {
       b.prefs.unit = o.prefs.unit === 'lb' ? 'lb' : 'kg';
+      b.prefs.lang = o.prefs.lang === 'en' ? 'en' : 'ar';
       Object.entries(o.prefs.mu || {}).forEach(([k, v]) => { if (okId(k)) b.prefs.mu[k] = v === 'lb' ? 'lb' : 'kg'; });
       Object.entries(o.prefs.step || {}).forEach(([k, v]) => { if (okId(k) && +v > 0) b.prefs.step[k] = +v; });
     }
@@ -147,20 +161,20 @@
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(S)); return true; } catch (e) {
-      toast('ما قدرت أحفظ في الجوال. تأكد إنك مو فاتح الموقع بالتصفح الخفي.');
+      toast(tr('ما قدرت أحفظ في الجوال. تأكد إنك مو فاتح الموقع بالتصفح الخفي.', "Couldn't save on this phone. Make sure you're not in private browsing."));
       return false;
     }
   }
 
   /* ---------- الأجهزة ---------- */
   const EQ = {
-    bar: { lbl: 'الوزن مع البار', step: 2.5, def: 20 },
-    sm: { lbl: 'الوزن مع البار', step: 2.5, def: 20 },
-    ez: { lbl: 'الوزن مع البار', step: 2.5, def: 10 },
-    db: { lbl: 'وزن الدمبل الواحد', step: 2.5, def: 10 },
-    mc: { lbl: 'الوزن على الجهاز', step: 5, def: 20 },
-    cb: { lbl: 'الوزن على الكيبل', step: 2.5, def: 10 },
-    pl: { lbl: 'الأقراص المركّبة', step: 5, def: 40 }
+    bar: { lbl: ['الوزن مع البار', 'Weight incl. bar'], step: 2.5, def: 20 },
+    sm: { lbl: ['الوزن مع البار', 'Weight incl. bar'], step: 2.5, def: 20 },
+    ez: { lbl: ['الوزن مع البار', 'Weight incl. bar'], step: 2.5, def: 10 },
+    db: { lbl: ['وزن الدمبل الواحد', 'Weight per dumbbell'], step: 2.5, def: 10 },
+    mc: { lbl: ['الوزن على الجهاز', 'Machine weight'], step: 5, def: 20 },
+    cb: { lbl: ['الوزن على الكيبل', 'Cable weight'], step: 2.5, def: 10 },
+    pl: { lbl: ['الأقراص المركّبة', 'Plates loaded'], step: 5, def: 40 }
   };
   const STEPS = { kg: [1, 2.5, 5], lb: [2.5, 5, 10] };
   const PLATES = { kg: [25, 20, 15, 10, 5, 2.5, 1.25], lb: [45, 35, 25, 10, 5, 2.5] };
@@ -173,6 +187,9 @@
     kg: { 25: 62, 20: 62, 15: 56, 10: 50, 5: 38, 2.5: 30, 1.25: 26 },
     lb: { 45: 62, 35: 56, 25: 50, 10: 38, 5: 30, 2.5: 26 }
   };
+  // خانة الكارديو تنحفظ بالعربي في التسجيل، وتنعرض حسب اللغة
+  const LV_EN = { 'السرعة': 'Speed', 'المستوى': 'Level' };
+  const lvName = s => (EN ? LV_EN[s] || s : s);
 
   let S = load();
   const sections = () => D.sections.concat(S.custom.sections);
@@ -180,6 +197,9 @@
   const secById = id => sections().find(s => s.id === id);
   const mById = id => machines().find(m => m.id === id);
   const secColor = id => (secById(id) || {}).color || 'steel';
+  const secName = s => (s ? (EN && s.en ? s.en : s.name) : '');
+  const mName = m => (EN && m.e ? m.e : m.n);
+  const eqLbl = m => { const x = (EQ[m.eq] || EQ.mc).lbl; return tr(x[0], x[1]); };
   const inSection = id => machines().filter(m => m.s === id && !S.hidden.includes(m.id));
   const logsOf = mid => S.logs.filter(l => l.m === mid).sort((a, b) => b.t - a.t);
   const lastLog = mid => logsOf(mid)[0] || null;
@@ -225,15 +245,15 @@
   function summary(l) {
     if (l.k === 'c') {
       const p = [plural(l.min, W.min)];
-      if (l.km) p.push(`${fmt(l.km)} كم`);
-      if (l.lv) p.push(`${l.lvl || 'المستوى'} ${fmt(l.lv)}`);
-      if (l.cal) p.push(`${fmt(l.cal)} سعرة`);
-      return p.join('، ');
+      if (l.km) p.push(`${fmt(l.km)} ${tr('كم', 'km')}`);
+      if (l.lv) p.push(`${lvName(l.lvl || 'المستوى')} ${fmt(l.lv)}`);
+      if (l.cal) p.push(`${fmt(l.cal)} ${tr('سعرة', 'cal')}`);
+      return p.join(SEP());
     }
     if (l.k === 't') {
       return sameSets(l.sets)
         ? `${plural(l.sets[0].s, W.sec)} × ${plural(l.sets.length, W.set)}`
-        : l.sets.map(s => `${fmt(s.s)} ث`).join('، ');
+        : l.sets.map(s => `${fmt(s.s)} ${tr('ث', 's')}`).join(SEP());
     }
     const U = unitName(l.u);
     if (sameSets(l.sets)) {
@@ -241,34 +261,36 @@
       const head = +s.w > 0 ? `${fmt(s.w)} ${U} × ` : (l.k === 'bw' ? '' : `0 ${U} × `);
       return `${head}${plural(s.r, W.rep)} × ${plural(l.sets.length, W.set)}`;
     }
-    if (l.k === 'bw' && l.sets.every(s => !(+s.w))) return l.sets.map(s => fmt(s.r)).join('، ') + ' عدة';
-    return l.sets.map(s => `${fmt(s.w)} ${U} × ${fmt(s.r)}`).join('، ');
+    if (l.k === 'bw' && l.sets.every(s => !(+s.w))) return l.sets.map(s => fmt(s.r)).join(SEP()) + ' ' + tr('عدة', 'reps');
+    return l.sets.map(s => `${fmt(s.w)} ${U} × ${fmt(s.r)}`).join(SEP());
   }
 
   /* الاقتراح: زيادة تدريجية (8 إلى 12 عدة) */
   function suggest(m, last) {
     const u = unitOf(m, last);
-    const U = unitName(u);
-    const st = stepOf(m, u);
     if (m.k === 'c') {
-      if (!last) return { min: 20, text: 'سجّل مدة الكارديو بالدقائق، والمسافة والمستوى إذا تطلع لك على شاشة الجهاز.' };
-      return { min: (last.min || 0) + 2, lv: last.lv, text: `آخر مرة ${plural(last.min, W.min)}. زِد دقيقتين اليوم، أو ارفع ${m.lv || 'الشدة'} درجة.` };
+      if (!last) return { min: 20, text: tr('سجّل مدة الكارديو بالدقائق، والمسافة والمستوى إذا تطلع لك على شاشة الجهاز.', 'Log your cardio time in minutes, plus distance and level if the machine screen shows them.') };
+      return {
+        min: (last.min || 0) + 2, lv: last.lv,
+        text: tr(`آخر مرة ${plural(last.min, W.min)}. زِد دقيقتين اليوم، أو ارفع ${m.lv || 'الشدة'} درجة.`,
+          `Last time: ${plural(last.min, W.min)}. Add 2 minutes today, or raise the ${(m.lv ? lvName(m.lv) : 'intensity').toLowerCase()} one step.`)
+      };
     }
     if (m.k === 't') {
-      if (!last) return { s: 30, n: 3, text: 'ابدأ بـ 30 ثانية لكل جلسة، وزِد 5 أو 10 ثواني لما تحسها سهلة.' };
+      if (!last) return { s: 30, n: 3, text: tr('ابدأ بـ 30 ثانية لكل جلسة، وزِد 5 أو 10 ثواني لما تحسها سهلة.', 'Start with 30 seconds per set, and add 5 or 10 seconds once it feels easy.') };
       const s = Math.max(...last.sets.map(x => +x.s || 0));
-      return { s: s + 10, n: last.sets.length, text: `آخر مرة أطول ثبات ${plural(s, W.sec)}. جرّب ${s + 10} ثانية اليوم.` };
+      return { s: s + 10, n: last.sets.length, text: tr(`آخر مرة أطول ثبات ${plural(s, W.sec)}. جرّب ${s + 10} ثانية اليوم.`, `Longest hold last time: ${plural(s, W.sec)}. Try ${s + 10} seconds today.`) };
     }
     if (m.k === 'bw') {
-      if (!last) return { w: 0, r: 10, n: 3, text: 'سجّل عداتك وجلساتك. وإذا حطيت وزن إضافي (حزام أو دمبل) اكتبه تحت.' };
+      if (!last) return { w: 0, r: 10, n: 3, text: tr('سجّل عداتك وجلساتك. وإذا حطيت وزن إضافي (حزام أو دمبل) اكتبه تحت.', 'Log your reps and sets. If you add extra weight (a belt or a dumbbell), enter it below.') };
       const minR = Math.min(...last.sets.map(x => x.r));
       const n = last.sets.length;
       const w = Math.max(...last.sets.map(x => +x.w || 0));
-      if (minR >= 15) return { w, r: minR, n: Math.min(n + 1, 6), text: `كملت ${plural(minR, W.rep)} وفوق بكل جلسة. زِد جلسة، أو حط وزن إضافي بسيط.` };
-      return { w, r: minR + 1, n, text: `حاول توصل ${plural(minR + 1, W.rep)} بكل جلسة اليوم.` };
+      if (minR >= 15) return { w, r: minR, n: Math.min(n + 1, 6), text: tr(`كملت ${plural(minR, W.rep)} وفوق بكل جلسة. زِد جلسة، أو حط وزن إضافي بسيط.`, `You did ${plural(minR, W.rep)} or more in every set. Add a set, or a little extra weight.`) };
+      return { w, r: minR + 1, n, text: tr(`حاول توصل ${plural(minR + 1, W.rep)} بكل جلسة اليوم.`, `Try to reach ${plural(minR + 1, W.rep)} in every set today.`) };
     }
     if (!last) {
-      return { w: defW(m, u), r: 12, n: 3, text: 'أول مرة تسجل هالجهاز. اختر وزن تقدر تسوي فيه 12 عدة بشكل نظيف، والمرة الجاية أقترح عليك متى تزيد.' };
+      return { w: defW(m, u), r: 12, n: 3, text: tr('أول مرة تسجل هالجهاز. اختر وزن تقدر تسوي فيه 12 عدة بشكل نظيف، والمرة الجاية أقترح عليك متى تزيد.', "First time on this machine. Pick a weight you can do 12 clean reps with. Next time you'll get a hint on when to go up.") };
     }
     const lu = last.u || 'kg';
     const top = Math.max(...last.sets.map(x => +x.w || 0));
@@ -276,10 +298,9 @@
     const n = last.sets.length;
     const LU = unitName(lu);
     const lst = stepOf(m, lu);
-    if (minR >= 12) return { w: round2(top + lst), r: 8, n, text: `آخر مرة كملت ${plural(minR, W.rep)} بكل جلسة على ${fmt(top)} ${LU}. جرّب ${fmt(top + lst)} ${LU} اليوم، ولو وصلت 8 عدات فأنت ماشي صح.` };
-    if (minR < 6) return { w: top, r: minR + 1, n, text: `آخر مرة كان الوزن ثقيل عليك (${plural(minR, W.rep)}). خلك على ${fmt(top)} ${LU} وحاول توصل ${minR + 1}، أو نزّل إلى ${fmt(Math.max(0, top - lst))}.` };
-    void st; void U;
-    return { w: top, r: minR + 1, n, text: `خلك على ${fmt(top)} ${LU} وحاول توصل ${plural(minR + 1, W.rep)} بكل جلسة. أول ما توصل 12 بكل الجلسات زِد الوزن.` };
+    if (minR >= 12) return { w: round2(top + lst), r: 8, n, text: tr(`آخر مرة كملت ${plural(minR, W.rep)} بكل جلسة على ${fmt(top)} ${LU}. جرّب ${fmt(top + lst)} ${LU} اليوم، ولو وصلت 8 عدات فأنت ماشي صح.`, `Last time you did ${plural(minR, W.rep)} in every set at ${fmt(top)} ${LU}. Try ${fmt(top + lst)} ${LU} today. If you reach 8 reps, you're on track.`) };
+    if (minR < 6) return { w: top, r: minR + 1, n, text: tr(`آخر مرة كان الوزن ثقيل عليك (${plural(minR, W.rep)}). خلك على ${fmt(top)} ${LU} وحاول توصل ${minR + 1}، أو نزّل إلى ${fmt(Math.max(0, top - lst))}.`, `The weight was heavy last time (${plural(minR, W.rep)}). Stay at ${fmt(top)} ${LU} and aim for ${minR + 1}, or drop to ${fmt(Math.max(0, top - lst))}.`) };
+    return { w: top, r: minR + 1, n, text: tr(`خلك على ${fmt(top)} ${LU} وحاول توصل ${plural(minR + 1, W.rep)} بكل جلسة. أول ما توصل 12 بكل الجلسات زِد الوزن.`, `Stay at ${fmt(top)} ${LU} and aim for ${plural(minR + 1, W.rep)} in every set. Once you hit 12 in all sets, add weight.`) };
   }
 
   /* ---------- الأيقونات ---------- */
@@ -292,8 +313,30 @@
     check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
     trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
     x: svg('<path d="M7 7l10 10M17 7L7 17"/>'),
-    search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>')
+    search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'),
+    globe: svg('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.3 3.5 5.2 3.5 8.5s-1.2 6.2-3.5 8.5c-2.3-2.3-3.5-5.2-3.5-8.5s1.2-6.2 3.5-8.5z"/>')
   };
+
+  /* ---------- اللغة: الاتجاه والتواريخ والشريط ---------- */
+  function applyLang() {
+    EN = S.prefs.lang === 'en';
+    const h = document.documentElement;
+    h.lang = EN ? 'en' : 'ar';
+    h.dir = EN ? 'ltr' : 'rtl';
+    document.title = tr('أوزاني | حسبة أوزان النادي', 'Awzani | Gym weight log');
+    setLocale();
+    const nav = { home: tr('الأقسام', 'Sections'), log: tr('السجل', 'Log'), set: tr('الإعدادات', 'Settings') };
+    $$('.tabs a').forEach(a => { const s = $('span', a); if (s) s.textContent = nav[a.dataset.v] || s.textContent; });
+    const tabs = $('.tabs');
+    if (tabs) tabs.setAttribute('aria-label', tr('التنقل', 'Navigation'));
+    $('#sheet').setAttribute('aria-label', tr('نافذة', 'Dialog'));
+  }
+  function setLang(l) {
+    S.prefs.lang = l === 'en' ? 'en' : 'ar';
+    save();
+    applyLang();
+  }
+  const langBtn = () => `<button type="button" class="lang-btn" data-act="lang" lang="${EN ? 'ar' : 'en'}" aria-label="${EN ? 'غيّر اللغة إلى العربي' : 'Switch to English'}">${I.globe}<span>${EN ? 'عربي' : 'English'}</span></button>`;
 
   /* ---------- التنبيه ---------- */
   let toastT;
@@ -343,28 +386,29 @@
   }
 
   /* ---------- البداية: الاسم ---------- */
-  function viewStart() {
+  function viewStart(keep) {
     app.innerHTML = `
       <section class="start">
+        <div class="start-lang">${langBtn()}</div>
         <div class="start-board">
-          <h1 class="mark led">أوزاني</h1>
-          <p>حسبة أوزانك في النادي، بدون اشتراك</p>
+          <h1 class="mark led">${tr('أوزاني', 'Awzani')}</h1>
+          <p>${tr('حسبة أوزانك في النادي، بدون اشتراك', 'Your gym weights, no subscription')}</p>
         </div>
         <form id="startForm" class="start-form" novalidate>
-          <label class="fld"><span>وش اسمك؟</span>
-            <input type="text" name="name" maxlength="24" placeholder="اكتب اسمك" autocomplete="given-name" enterkeyhint="go" required>
+          <label class="fld"><span>${tr('وش اسمك؟', "What's your name?")}</span>
+            <input type="text" name="name" maxlength="24" placeholder="${tr('اكتب اسمك', 'Type your name')}" value="${esc(keep || '')}" autocomplete="given-name" enterkeyhint="go" required>
           </label>
-          <button class="go" type="submit"><span>ابدأ</span></button>
-          <p class="start-note">اسمك وتمارينك تنحفظ في جوالك بس.</p>
+          <button class="go" type="submit"><span>${tr('ابدأ', 'Start')}</span></button>
+          <p class="start-note">${tr('اسمك وتمارينك تنحفظ في جوالك بس.', 'Your name and workouts stay on this phone only.')}</p>
         </form>
-        <label class="text-btn start-restore">عندك نسخة احتياطية من جوال ثاني؟ رجّعها<input type="file" id="imp" accept=".json,application/json" hidden></label>
+        <label class="text-btn start-restore">${tr('عندك نسخة احتياطية من جوال ثاني؟ رجّعها', 'Have a backup from another phone? Restore it')}<input type="file" id="imp" accept=".json,application/json" hidden></label>
       </section>`;
     $('#imp').addEventListener('change', importData);
     const f = $('#startForm');
     f.addEventListener('submit', e => {
       e.preventDefault();
       const n = String(new FormData(f).get('name') || '').trim();
-      if (!n) { toast('اكتب اسمك عشان نبدأ.'); $('input', f).focus(); return; }
+      if (!n) { toast(tr('اكتب اسمك عشان نبدأ.', 'Type your name to start.')); $('input', f).focus(); return; }
       S.name = n.slice(0, 24);
       if (!save()) return;
       location.hash = '#/';
@@ -380,30 +424,30 @@
     let w = last ? last.w : (u === 'lb' ? 160 : 75);
     const recent = S.body.slice(-6).reverse();
     openSheet(`
-      <h2>وزن جسمك اليوم</h2>
+      <h2>${tr('وزن جسمك اليوم', 'Your body weight today')}</h2>
       <div class="bw-row">
-        <button type="button" class="stp sm" data-bw="0.5" aria-label="زِد نص">${I.plus}</button>
-        <input class="cnt-v" id="bwIn" name="w" type="text" inputmode="decimal" autocomplete="off" value="${fmtIn(w)}" aria-label="وزن الجسم">
-        <button type="button" class="stp sm" data-bw="-0.5" aria-label="أنقص نص">${I.minus}</button>
+        <button type="button" class="stp sm" data-bw="0.5" aria-label="${tr('زِد نص', 'Add 0.5')}">${I.plus}</button>
+        <input class="cnt-v" id="bwIn" name="w" type="text" inputmode="decimal" autocomplete="off" value="${fmtIn(w)}" aria-label="${tr('وزن الجسم', 'Body weight')}">
+        <button type="button" class="stp sm" data-bw="-0.5" aria-label="${tr('أنقص نص', 'Subtract 0.5')}">${I.minus}</button>
       </div>
-      <div class="seg light bw-seg" role="group" aria-label="الوحدة">
-        <button type="button" data-bu="kg" aria-pressed="${u === 'kg'}">كيلو</button>
-        <button type="button" data-bu="lb" aria-pressed="${u === 'lb'}">رطل</button>
+      <div class="seg light bw-seg" role="group" aria-label="${tr('الوحدة', 'Unit')}">
+        <button type="button" data-bu="kg" aria-pressed="${u === 'kg'}">${tr('كيلو', 'kg')}</button>
+        <button type="button" data-bu="lb" aria-pressed="${u === 'lb'}">${tr('رطل', 'lb')}</button>
       </div>
-      ${recent.length ? `<h3 class="bw-h">آخر القياسات</h3><ul class="plain bw-list">${recent.map((x, i) => {
+      ${recent.length ? `<h3 class="bw-h">${tr('آخر القياسات', 'Recent weigh-ins')}</h3><ul class="plain bw-list">${recent.map((x, i) => {
         const prev = recent[i + 1];
         const d = prev && prev.u === x.u ? round2(x.w - prev.w) : 0;
         return `<li><span>${dfDay.format(new Date(x.t))}</span><span><b class="nw">${fmt(x.w)}</b> ${unitName(x.u)}${d ? ` <em class="delta">${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</em>` : ''}</span></li>`;
       }).join('')}</ul>` : ''}`, fd => {
       const v = num(fd.get('w'));
-      if (!(v > 20 && v < 700)) { toast('اكتب وزنك صح.'); return false; }
+      if (!(v > 20 && v < 700)) { toast(tr('اكتب وزنك صح.', 'Enter a valid weight.')); return false; }
       const t0 = startOfDay(Date.now());
       S.body = S.body.filter(x => x.t < t0);
       S.body.push({ t: Date.now(), w: round2(v), u });
       if (!save()) return false;
-      toast(`انحفظ وزنك: ${fmt(v)} ${unitName(u)}.`);
+      toast(tr(`انحفظ وزنك: ${fmt(v)} ${unitName(u)}.`, `Saved: ${fmt(v)} ${unitName(u)}.`));
       route();
-    }, 'احفظ');
+    }, tr('احفظ', 'Save'));
     const d = $('#sheet');
     $('form', d).addEventListener('click', e => {
       const b = e.target.closest('button');
@@ -431,8 +475,8 @@
   function plateTile(sec) {
     const ms = inSection(sec.id);
     return `<a class="plate c-${esc(sec.color)}" href="#/s/${esc(sec.id)}">
-      <span class="pl-name">${esc(sec.name)}</span>
-      <span class="pl-count">${ms.length ? numWord(ms.length, W.mc) : 'فاضي'}</span>
+      <span class="pl-name">${esc(secName(sec))}</span>
+      <span class="pl-count">${ms.length ? numWord(ms.length, W.mc) : tr('فاضي', 'Empty')}</span>
     </a>`;
   }
   function mRow(m) {
@@ -440,8 +484,8 @@
     return `<a class="mrow" href="#/m/${esc(m.id)}">
       ${thumb(m)}
       <span class="mrow-t">
-        <b>${esc(m.n)}</b>
-        ${m.e ? `<small><bdi dir="ltr">${esc(m.e)}</bdi></small>` : ''}
+        <b>${esc(mName(m))}</b>
+        ${!EN && m.e ? `<small><bdi dir="ltr">${esc(m.e)}</bdi></small>` : ''}
         ${l ? `<span class="mrow-l">${esc(summary(l))}<em>${rel(l.t)}</em></span>` : ''}
       </span>
       ${I.chev}
@@ -455,35 +499,35 @@
     const bw = lastBody();
     const bwToday = bw && daysAgo(bw.t) === 0;
     const cells = [
-      `<div><span class="led">${fmt(t.sets)}</span><span>مجموع الجلسات</span></div>`,
-      `<div><span class="led">${fmt(t.reps)}</span><span>مجموع العدات</span></div>`
+      `<div><span class="led">${fmt(t.sets)}</span><span>${tr('مجموع الجلسات', 'Total sets')}</span></div>`,
+      `<div><span class="led">${fmt(t.reps)}</span><span>${tr('مجموع العدات', 'Total reps')}</span></div>`
     ];
-    if (t.min) cells.push(`<div><span class="led">${fmt(t.min)}</span><span>دقائق الكارديو</span></div>`);
-    cells.push(`<button type="button" class="bw-cell" data-act="body" aria-label="وزن الجسم، اضغط وسجّله">
+    if (t.min) cells.push(`<div><span class="led">${fmt(t.min)}</span><span>${tr('دقائق الكارديو', 'Cardio minutes')}</span></div>`);
+    cells.push(`<button type="button" class="bw-cell" data-act="body" aria-label="${tr('وزن الجسم، اضغط وسجّله', 'Body weight, tap to log it')}">
       <span class="led${bw ? '' : ' dim'}">${bw ? fmt(bw.w) : '—'}</span>
-      <span>وزن الجسم${bw ? ` (${unitName(bw.u)})` : ''}<em>${bw ? (bwToday ? 'اليوم' : rel(bw.t)) : 'اضغط وسجّله'}</em></span>
+      <span>${tr('وزن الجسم', 'Body weight')}${bw ? ` (${unitName(bw.u)})` : ''}<em>${bw ? (bwToday ? tr('اليوم', 'today') : rel(bw.t)) : tr('اضغط وسجّله', 'Tap to log it')}</em></span>
     </button>`);
     app.innerHTML = `
       <header class="top today-head">
-        <p class="brand">أوزاني</p>
-        <p class="hello">هلا ${esc(S.name)}</p>
+        <div class="head-row"><p class="brand">${tr('أوزاني', 'Awzani')}</p>${langBtn()}</div>
+        <p class="hello">${tr('هلا', 'Hi')} ${esc(S.name)}</p>
         <h1 class="day">${dfWeek.format(now)}</h1>
         <p class="date">${dfDate.format(now)}</p>
       </header>
-      <section class="board" aria-label="تمرين اليوم">
-        <div class="board-top"><span>تمارين خلصتها اليوم</span></div>
-        <div class="board-main"><span class="led led-xl" id="bigEx" data-v="${t.ex}">${t.ex}</span><span class="board-u">${t.ex ? exWord(t.ex) : 'ما بديت للحين'}</span></div>
+      <section class="board" aria-label="${tr('تمرين اليوم', "Today's workout")}">
+        <div class="board-top"><span>${tr('تمارين خلصتها اليوم', 'Exercises done today')}</span></div>
+        <div class="board-main"><span class="led led-xl" id="bigEx" data-v="${t.ex}">${t.ex}</span><span class="board-u">${t.ex ? exWord(t.ex) : tr('ما بديت للحين', 'Not started yet')}</span></div>
         <div class="board-cells" style="--n:${cells.length}">${cells.join('')}</div>
       </section>
-      <label class="search">${I.search}<input id="q" type="search" placeholder="ابحث عن جهاز، مثل: تشيست برس" autocomplete="off" enterkeyhint="search" aria-label="ابحث عن جهاز"></label>
+      <label class="search">${I.search}<input id="q" type="search" placeholder="${tr('ابحث عن جهاز، مثل: تشيست برس', 'Search machines, e.g. chest press')}" autocomplete="off" enterkeyhint="search" aria-label="${tr('ابحث عن جهاز', 'Search machines')}"></label>
       <div id="results" class="mlist" hidden></div>
       <div id="homeBody">
-        ${recent.length ? `<section><h2 class="h2">رجعت لها مؤخرًا</h2><div class="chips">${recent.map(m => `<a class="chip" href="#/m/${esc(m.id)}"><span class="dot c-${esc(secColor(m.s))}" aria-hidden="true"></span>${esc(m.n)}</a>`).join('')}</div></section>` : ''}
+        ${recent.length ? `<section><h2 class="h2">${tr('رجعت لها مؤخرًا', 'Used recently')}</h2><div class="chips">${recent.map(m => `<a class="chip" href="#/m/${esc(m.id)}"><span class="dot c-${esc(secColor(m.s))}" aria-hidden="true"></span>${esc(mName(m))}</a>`).join('')}</div></section>` : ''}
         <section>
-          <h2 class="h2">الأقسام</h2>
+          <h2 class="h2">${tr('الأقسام', 'Sections')}</h2>
           <div class="plates">
             ${sections().map(plateTile).join('')}
-            <button class="plate plate-add" type="button" data-act="add-sec">${I.plus}<span>قسم جديد</span></button>
+            <button class="plate plate-add" type="button" data-act="add-sec">${I.plus}<span>${tr('قسم جديد', 'New section')}</span></button>
           </div>
         </section>
       </div>`;
@@ -494,11 +538,10 @@
       const res = $('#results'), body = $('#homeBody');
       if (!v) { res.hidden = true; body.hidden = false; return; }
       const hits = machines().filter(m => norm(m.n).includes(v) || (m.e && m.e.toLowerCase().includes(v)));
-      res.innerHTML = hits.length ? hits.map(mRow).join('') : '<p class="empty">ما لقيت جهاز بهالاسم. تقدر تضيفه من داخل القسم حقه.</p>';
+      res.innerHTML = hits.length ? hits.map(mRow).join('') : `<p class="empty">${tr('ما لقيت جهاز بهالاسم. تقدر تضيفه من داخل القسم حقه.', 'No machine with that name. You can add it inside its section.')}</p>`;
       res.hidden = false;
       body.hidden = true;
     });
-
   }
 
   /* ---------- القسم ---------- */
@@ -509,16 +552,16 @@
     const used = ms.filter(m => lastLog(m.id)).sort((a, b) => lastLog(b.id).t - lastLog(a.id).t);
     const rest = ms.filter(m => !lastLog(m.id));
     app.innerHTML = `
-      <a class="back" href="#/">${I.back}الأقسام</a>
+      <a class="back" href="#/">${I.back}${tr('الأقسام', 'Sections')}</a>
       <header class="shead">
         <span class="mini-plate c-${esc(sec.color)}" aria-hidden="true"></span>
-        <div><h1>${esc(sec.name)}</h1><p>${plural(ms.length, W.mc)}</p></div>
+        <div><h1>${esc(secName(sec))}</h1><p>${plural(ms.length, W.mc)}</p></div>
       </header>
-      ${used.length ? `<h2 class="h2">استخدمتها</h2><div class="mlist">${used.map(mRow).join('')}</div>` : ''}
-      ${rest.length ? `<h2 class="h2">${used.length ? 'باقي الأجهزة' : 'اختر الجهاز'}</h2><div class="mlist">${rest.map(mRow).join('')}</div>` : ''}
-      ${!ms.length ? '<p class="empty">القسم فاضي. أضف أول جهاز فيه.</p>' : ''}
-      <button class="add-row" type="button" data-act="add-m">${I.plus}<span>جهازك مو موجود؟ أضفه</span></button>
-      ${sec.custom ? '<div class="foot"><button class="text-btn danger" type="button" data-act="del-sec">احذف القسم</button></div>' : ''}`;
+      ${used.length ? `<h2 class="h2">${tr('استخدمتها', 'Used')}</h2><div class="mlist">${used.map(mRow).join('')}</div>` : ''}
+      ${rest.length ? `<h2 class="h2">${used.length ? tr('باقي الأجهزة', 'Other machines') : tr('اختر الجهاز', 'Pick a machine')}</h2><div class="mlist">${rest.map(mRow).join('')}</div>` : ''}
+      ${!ms.length ? `<p class="empty">${tr('القسم فاضي. أضف أول جهاز فيه.', 'This section is empty. Add its first machine.')}</p>` : ''}
+      <button class="add-row" type="button" data-act="add-m">${I.plus}<span>${tr('جهازك مو موجود؟ أضفه', 'Machine not listed? Add it')}</span></button>
+      ${sec.custom ? `<div class="foot"><button class="text-btn danger" type="button" data-act="del-sec">${tr('احذف القسم', 'Delete section')}</button></div>` : ''}`;
   }
 
   /* ---------- الجهاز ---------- */
@@ -547,10 +590,10 @@
   }
 
   function stepper(f, label, cls) {
-    return `<button type="button" class="stp ${cls || ''}" data-f="${f}" data-d="1" aria-label="زِد ${esc(label)}">${I.plus}</button>`;
+    return `<button type="button" class="stp ${cls || ''}" data-f="${f}" data-d="1" aria-label="${tr('زِد', 'Increase')} ${esc(label)}">${I.plus}</button>`;
   }
   function stepperDown(f, label, cls) {
-    return `<button type="button" class="stp ${cls || ''}" data-f="${f}" data-d="-1" aria-label="أنقص ${esc(label)}">${I.minus}</button>`;
+    return `<button type="button" class="stp ${cls || ''}" data-f="${f}" data-d="-1" aria-label="${tr('أنقص', 'Decrease')} ${esc(label)}">${I.minus}</button>`;
   }
   function ledRow(f, label, mode) {
     return `<div class="wrow simple">
@@ -570,18 +613,22 @@
     </div>`;
   }
   function unitSeg() {
-    return `<div class="seg" role="group" aria-label="الوحدة">
-      <button type="button" data-u="kg" aria-pressed="${F.u === 'kg'}">كجم</button>
-      <button type="button" data-u="lb" aria-pressed="${F.u === 'lb'}">رطل</button>
+    return `<div class="seg" role="group" aria-label="${tr('الوحدة', 'Unit')}">
+      <button type="button" data-u="kg" aria-pressed="${F.u === 'kg'}">${unitName('kg')}</button>
+      <button type="button" data-u="lb" aria-pressed="${F.u === 'lb'}">${unitName('lb')}</button>
     </div>`;
   }
   function stepsHTML(m) {
     const cur = stepOf(m, F.u);
-    return `<span>كل ضغطة</span>${STEPS[F.u].map(v => `<button type="button" data-step="${v}" aria-pressed="${v === cur}">${fmt(v)}</button>`).join('')}<span>${unitName(F.u)}</span>`;
+    return `<span>${tr('كل ضغطة', 'Each tap')}</span>${STEPS[F.u].map(v => `<button type="button" data-step="${v}" aria-pressed="${v === cur}">${fmt(v)}</button>`).join('')}<span>${unitName(F.u)}</span>`;
   }
+  const detailLbl = () => (F.detail
+    ? tr('رجّع للطريقة السريعة (كل الجلسات نفس الشي)', 'Back to quick mode (all sets the same)')
+    : tr('الجلسات مختلفة عن بعض؟ فصّل كل جلسة', 'Sets not all the same? Enter each set'));
+  const saveBtn = () => `<button type="button" class="go" id="save">${I.check}<span>${tr('سجّل', 'Log it')}</span></button>`;
 
   function weightForm(m) {
-    const lbl = m.l || (EQ[m.eq] || EQ.mc).lbl;
+    const lbl = (EN ? m.le : m.l) || eqLbl(m);
     return `
       <div class="led-box">
         <div class="led-top"><span>${esc(lbl)}</span>${unitSeg()}</div>
@@ -590,46 +637,46 @@
         <div class="calc" id="calc" aria-live="polite"></div>
       </div>
       ${m.eq === 'bar' ? '<div class="pside simple" id="pside"></div>' : ''}
-      <div class="duo simple">${counter('r', 'العدات')}${counter('n', 'الجلسات')}</div>
+      <div class="duo simple">${counter('r', tr('العدات', 'Reps'))}${counter('n', tr('الجلسات', 'Sets'))}</div>
       <div class="detail" id="detail" hidden></div>
-      <button type="button" class="text-btn" id="detailT">الجلسات مختلفة عن بعض؟ فصّل كل جلسة</button>
-      <button type="button" class="go" id="save">${I.check}<span>سجّل</span></button>`;
+      <button type="button" class="text-btn" id="detailT">${detailLbl()}</button>
+      ${saveBtn()}`;
   }
   function bwForm() {
     return `
       <div class="led-box">
-        <div class="led-top"><span>العدات بكل جلسة</span></div>
-        ${ledRow('r', 'العدات', 'numeric')}
+        <div class="led-top"><span>${tr('العدات بكل جلسة', 'Reps per set')}</span></div>
+        ${ledRow('r', tr('العدات', 'Reps'), 'numeric')}
         <div class="calc" id="calc" aria-live="polite"></div>
       </div>
-      <div class="duo simple">${counter('n', 'الجلسات')}${counter('w', `وزن إضافي (${unitName(F.u)})`, 'decimal')}</div>
+      <div class="duo simple">${counter('n', tr('الجلسات', 'Sets'))}${counter('w', tr(`وزن إضافي (${unitName(F.u)})`, `Extra weight (${unitName(F.u)})`), 'decimal')}</div>
       <div class="detail" id="detail" hidden></div>
-      <button type="button" class="text-btn" id="detailT">الجلسات مختلفة عن بعض؟ فصّل كل جلسة</button>
-      <button type="button" class="go" id="save">${I.check}<span>سجّل</span></button>`;
+      <button type="button" class="text-btn" id="detailT">${detailLbl()}</button>
+      ${saveBtn()}`;
   }
   function timedForm() {
     return `
       <div class="led-box">
-        <div class="led-top"><span>الثواني بكل جلسة</span></div>
-        ${ledRow('s', 'الثواني', 'numeric')}
+        <div class="led-top"><span>${tr('الثواني بكل جلسة', 'Seconds per set')}</span></div>
+        ${ledRow('s', tr('الثواني', 'Seconds'), 'numeric')}
         <div class="calc" id="calc" aria-live="polite"></div>
       </div>
-      <div class="duo one">${counter('n', 'الجلسات')}</div>
-      <button type="button" class="go" id="save">${I.check}<span>سجّل</span></button>`;
+      <div class="duo one">${counter('n', tr('الجلسات', 'Sets'))}</div>
+      ${saveBtn()}`;
   }
   function cardioForm(m) {
-    const opt = (id, label, mode) => `<label class="fld"><span>${esc(label)}</span><input id="${id}" type="text" inputmode="${mode}" autocomplete="off" placeholder="اختياري" value="${F[id] ? fmtIn(F[id]) : ''}"></label>`;
+    const opt = (id, label, mode) => `<label class="fld"><span>${esc(label)}</span><input id="${id}" type="text" inputmode="${mode}" autocomplete="off" placeholder="${tr('اختياري', 'Optional')}" value="${F[id] ? fmtIn(F[id]) : ''}"></label>`;
     return `
       <div class="led-box">
-        <div class="led-top"><span>المدة بالدقائق</span></div>
-        ${ledRow('min', 'الدقائق', 'numeric')}
+        <div class="led-top"><span>${tr('المدة بالدقائق', 'Time in minutes')}</span></div>
+        ${ledRow('min', tr('الدقائق', 'Minutes'), 'numeric')}
       </div>
       <div class="trio">
-        ${opt('km', 'المسافة (كم)', 'decimal')}
-        ${m.lv ? opt('lv', m.lv, 'decimal') : ''}
-        ${opt('cal', 'السعرات', 'numeric')}
+        ${opt('km', tr('المسافة (كم)', 'Distance (km)'), 'decimal')}
+        ${m.lv ? opt('lv', lvName(m.lv), 'decimal') : ''}
+        ${opt('cal', tr('السعرات', 'Calories'), 'numeric')}
       </div>
-      <button type="button" class="go" id="save">${I.check}<span>سجّل</span></button>`;
+      ${saveBtn()}`;
   }
 
   function viewMachine(id) {
@@ -640,25 +687,26 @@
     const sug = suggest(m, last);
     initForm(m, last, sug);
     const today = last && daysAgo(last.t) === 0;
-    const tipText = today ? 'سجلت هالجهاز اليوم. لو بتسجل جولة ثانية عدّل الأرقام واضغط سجّل.' : sug.text;
+    const tipText = today ? tr('سجلت هالجهاز اليوم. لو بتسجل جولة ثانية عدّل الأرقام واضغط سجّل.', 'You logged this machine today. For another round, change the numbers and tap Log it.') : sug.text;
+    const name = mName(m);
     app.innerHTML = `
-      <a class="back" href="${sec ? '#/s/' + esc(sec.id) : '#/'}">${I.back}${esc(sec ? sec.name : 'الأقسام')}</a>
+      <a class="back" href="${sec ? '#/s/' + esc(sec.id) : '#/'}">${I.back}${esc(sec ? secName(sec) : tr('الأقسام', 'Sections'))}</a>
       <header class="mhead${hasPhoto(m) ? ' has-photo' : ''}">
         <div class="mhead-t">
-          <h1>${esc(m.n)}</h1>
-          ${m.e ? `<p class="en"><bdi dir="ltr">${esc(m.e)}</bdi></p>` : ''}
+          <h1>${esc(name)}</h1>
+          ${!EN && m.e ? `<p class="en"><bdi dir="ltr">${esc(m.e)}</bdi></p>` : ''}
         </div>
-        ${hasPhoto(m) ? `<button type="button" class="mphoto" data-act="photo" aria-label="كبّر صورة ${esc(m.n)}">${frames(m, 'صورة ' + m.n)}</button>` : ''}
+        ${hasPhoto(m) ? `<button type="button" class="mphoto" data-act="photo" aria-label="${tr('كبّر صورة', 'Enlarge photo of')} ${esc(name)}">${frames(m, tr('صورة ', 'Photo of ') + name)}</button>` : ''}
       </header>
       <div class="tip">
-        ${last ? `<p class="tip-last"><span>آخر مرة، ${rel(last.t)}</span><b>${esc(summary(last))}</b></p>` : ''}
+        ${last ? `<p class="tip-last"><span>${tr('آخر مرة،', 'Last time:')} ${rel(last.t)}</span><b>${esc(summary(last))}</b></p>` : ''}
         <p class="tip-sug"><span class="spark" aria-hidden="true"></span>${esc(tipText)}</p>
       </div>
       <section class="rig" id="rig">${m.k === 'c' ? cardioForm(m) : m.k === 't' ? timedForm() : m.k === 'bw' ? bwForm() : weightForm(m)}</section>
       <section class="hist" id="hist"></section>
       <div class="foot">${m.custom
-        ? '<button class="text-btn danger" type="button" data-act="del-m">احذف الجهاز</button>'
-        : '<button class="text-btn" type="button" data-act="hide-m">ما أستخدمه؟ أخفه من القائمة</button>'}</div>`;
+        ? `<button class="text-btn danger" type="button" data-act="del-m">${tr('احذف الجهاز', 'Delete machine')}</button>`
+        : `<button class="text-btn" type="button" data-act="hide-m">${tr('ما أستخدمه؟ أخفه من القائمة', "Don't use it? Hide it from the list")}</button>`}</div>`;
     bindForm(m);
     if (F.detail) applyDetail(m);
     updAll(m);
@@ -673,24 +721,25 @@
     const el = $('#calc');
     if (!el) return;
     const U = unitName(F.u);
+    const L = { sets: tr('جلسات', 'sets'), reps: tr('عدات', 'reps'), tot: tr(`${U} المجموع`, `${U} total`) };
     if (F.k === 't') {
       const tot = (F.s || 0) * (F.n || 0);
       const mm = Math.floor(tot / 60), ss = Math.round(tot % 60);
-      el.innerHTML = cell(fmt(F.s), 'ثانية') + OP_X + cell(fmt(F.n), 'جلسات') + OP_EQ + cell(`${mm}:${String(ss).padStart(2, '0')}`, 'دقيقة مجموع', 'sum');
-      el.setAttribute('aria-label', `المجموع ${mm} دقيقة و ${ss} ثانية`);
+      el.innerHTML = cell(fmt(F.s), tr('ثانية', 'sec')) + OP_X + cell(fmt(F.n), L.sets) + OP_EQ + cell(`${mm}:${String(ss).padStart(2, '0')}`, tr('دقيقة مجموع', 'min total'), 'sum');
+      el.setAttribute('aria-label', tr(`المجموع ${mm} دقيقة و ${ss} ثانية`, `Total ${mm} min ${ss} sec`));
       return;
     }
     const sets = currentSets();
     const reps = sets.reduce((a, s) => a + s.r, 0);
     const vol = sets.reduce((a, s) => a + s.w * s.r, 0);
     if (F.detail) {
-      el.innerHTML = cell(sets.length, 'جلسات') + '<i class="gap" aria-hidden="true"></i>' + cell(reps, 'عدة') + OP_EQ + cell(fmt(vol), `${U} المجموع`, 'sum');
+      el.innerHTML = cell(sets.length, L.sets) + '<i class="gap" aria-hidden="true"></i>' + cell(reps, tr('عدة', 'reps')) + OP_EQ + cell(fmt(vol), L.tot, 'sum');
     } else if (F.k === 'bw' && !(+F.w)) {
-      el.innerHTML = cell(fmt(F.r), 'عدات') + OP_X + cell(fmt(F.n), 'جلسات') + OP_EQ + cell(fmt(reps), 'عدة مجموع', 'sum');
+      el.innerHTML = cell(fmt(F.r), L.reps) + OP_X + cell(fmt(F.n), L.sets) + OP_EQ + cell(fmt(reps), tr('عدة مجموع', 'reps total'), 'sum');
     } else if (F.k === 'bw') {
-      el.innerHTML = cell(fmt(F.r), 'عدات') + OP_X + cell(fmt(F.n), 'جلسات') + OP_X + cell(fmt(F.w), U) + OP_EQ + cell(fmt(vol), `${U} المجموع`, 'sum');
+      el.innerHTML = cell(fmt(F.r), L.reps) + OP_X + cell(fmt(F.n), L.sets) + OP_X + cell(fmt(F.w), U) + OP_EQ + cell(fmt(vol), L.tot, 'sum');
     } else {
-      el.innerHTML = cell(fmt(F.w), U) + OP_X + cell(fmt(F.r), 'عدات') + OP_X + cell(fmt(F.n), 'جلسات') + OP_EQ + cell(fmt(vol), `${U} المجموع`, 'sum');
+      el.innerHTML = cell(fmt(F.w), U) + OP_X + cell(fmt(F.r), L.reps) + OP_X + cell(fmt(F.n), L.sets) + OP_EQ + cell(fmt(vol), L.tot, 'sum');
     }
   }
   function updPlates() {
@@ -698,14 +747,14 @@
     if (!el || F.detail) return;
     const U = unitName(F.u);
     const r = platesFor(+F.w || 0, F.u);
-    if (r.under) { el.innerHTML = `<p>الوزن أقل من البار نفسه (${r.bar} ${U}).</p>`; return; }
-    if (!r.out.length && !r.rem) { el.innerHTML = `<p>البار لحاله بدون أقراص (${r.bar} ${U}).</p>`; return; }
-    el.innerHTML = `<p>حط في كل جهة من البار (البار ${r.bar} ${U}):</p>
-      <div class="sleeve" aria-label="الأقراص في كل جهة: ${r.out.map(fmt).join(' + ')}">
+    if (r.under) { el.innerHTML = `<p>${tr(`الوزن أقل من البار نفسه (${r.bar} ${U}).`, `That's less than the bar itself (${r.bar} ${U}).`)}</p>`; return; }
+    if (!r.out.length && !r.rem) { el.innerHTML = `<p>${tr(`البار لحاله بدون أقراص (${r.bar} ${U}).`, `Just the bar, no plates (${r.bar} ${U}).`)}</p>`; return; }
+    el.innerHTML = `<p>${tr(`حط في كل جهة من البار (البار ${r.bar} ${U}):`, `Load on each side of the bar (bar ${r.bar} ${U}):`)}</p>
+      <div class="sleeve" aria-label="${tr('الأقراص في كل جهة', 'Plates per side')}: ${r.out.map(fmt).join(' + ')}">
         <span class="collar" aria-hidden="true"></span>
         ${r.out.map(p => `<span class="pchip c-${PCOL[F.u][p]}" style="height:${PH[F.u][p]}px">${fmt(p)}</span>`).join('')}
       </div>
-      ${r.rem ? `<p class="warn">ما يتركب بالضبط بالأقراص المعتادة، يبقى ${fmt(r.rem * 2)} ${U}.</p>` : ''}`;
+      ${r.rem ? `<p class="warn">${tr(`ما يتركب بالضبط بالأقراص المعتادة، يبقى ${fmt(r.rem * 2)} ${U}.`, `Can't load this exactly with standard plates; ${fmt(r.rem * 2)} ${U} left over.`)}</p>` : ''}`;
   }
   function fitLed() {
     const el = $('#rig .led-in');
@@ -724,17 +773,17 @@
     const isBw = F.k === 'bw';
     box.innerHTML = F.sets.map((s, i) => `
       <div class="drow" data-i="${i}">
-        <span class="drow-n">جلسة ${i + 1}</span>
-        <label><input type="text" inputmode="decimal" data-k="w" value="${fmtIn(s.w)}" aria-label="${isBw ? 'الوزن الإضافي' : 'الوزن'} في الجلسة ${i + 1}"><small>${U}</small></label>
+        <span class="drow-n">${tr('جلسة', 'Set')} ${i + 1}</span>
+        <label><input type="text" inputmode="decimal" data-k="w" value="${fmtIn(s.w)}" aria-label="${isBw ? tr('الوزن الإضافي في الجلسة', 'Extra weight, set') : tr('الوزن في الجلسة', 'Weight, set')} ${i + 1}"><small>${U}</small></label>
         <span class="x" aria-hidden="true">×</span>
-        <label><input type="text" inputmode="numeric" data-k="r" value="${fmtIn(s.r)}" aria-label="العدات في الجلسة ${i + 1}"><small>عدة</small></label>
-        <button type="button" class="drow-del" data-del="${i}" aria-label="احذف الجلسة ${i + 1}" ${F.sets.length < 2 ? 'disabled' : ''}>${I.x}</button>
-      </div>`).join('') + `<button type="button" class="add-set" id="addSet">${I.plus}<span>أضف جلسة</span></button>`;
+        <label><input type="text" inputmode="numeric" data-k="r" value="${fmtIn(s.r)}" aria-label="${tr('العدات في الجلسة', 'Reps, set')} ${i + 1}"><small>${tr('عدة', 'reps')}</small></label>
+        <button type="button" class="drow-del" data-del="${i}" aria-label="${tr('احذف الجلسة', 'Delete set')} ${i + 1}" ${F.sets.length < 2 ? 'disabled' : ''}>${I.x}</button>
+      </div>`).join('') + `<button type="button" class="add-set" id="addSet">${I.plus}<span>${tr('أضف جلسة', 'Add a set')}</span></button>`;
   }
   function applyDetail() {
     $$('#rig .simple').forEach(x => { x.hidden = F.detail; });
     const t = $('#detailT');
-    if (t) t.textContent = F.detail ? 'رجّع للطريقة السريعة (كل الجلسات نفس الشي)' : 'الجلسات مختلفة عن بعض؟ فصّل كل جلسة';
+    if (t) t.textContent = detailLbl();
     renderDetail();
   }
   function syncInputs() {
@@ -840,26 +889,26 @@
     const log = { id: uid(), m: m.id, n: m.n, k: m.k, t: Date.now() };
     if (m.k === 'c') {
       const min = num(F.min);
-      if (!(min > 0)) { toast('اكتب كم دقيقة لعبت.'); return; }
+      if (!(min > 0)) { toast(tr('اكتب كم دقيقة لعبت.', 'Enter how many minutes you did.')); return; }
       log.min = min;
       if (num(F.km)) log.km = num(F.km);
       if (num(F.lv)) { log.lv = num(F.lv); log.lvl = m.lv || 'المستوى'; }
       if (num(F.cal)) log.cal = num(F.cal);
     } else {
       const sets = currentSets();
-      if (!sets.length) { toast('أضف جلسة وحدة على الأقل.'); return; }
+      if (!sets.length) { toast(tr('أضف جلسة وحدة على الأقل.', 'Add at least one set.')); return; }
       if (m.k === 't') {
-        if (sets.some(s => !(s.s > 0))) { toast('اكتب كم ثانية بكل جلسة.'); return; }
-      } else if (sets.some(s => !(s.r > 0))) { toast('فيه جلسة عداتها صفر. عدّلها أو احذفها.'); return; }
+        if (sets.some(s => !(s.s > 0))) { toast(tr('اكتب كم ثانية بكل جلسة.', 'Enter the seconds for each set.')); return; }
+      } else if (sets.some(s => !(s.r > 0))) { toast(tr('فيه جلسة عداتها صفر. عدّلها أو احذفها.', 'One set has zero reps. Fix it or delete it.')); return; }
       log.sets = sets;
       if (m.k !== 't') { log.u = F.u; S.prefs.mu[m.id] = F.u; }
     }
     S.logs.push(log);
     if (!save()) { S.logs.pop(); return; }
     const v = volU(log);
-    const tail = v > 0 ? ` رفعت ${fmt(v)} ${unitName(log.u)} على هالجهاز.` : '';
+    const tail = v > 0 ? tr(` رفعت ${fmt(v)} ${unitName(log.u)} على هالجهاز.`, ` You lifted ${fmt(v)} ${unitName(log.u)} on this machine.`) : '';
     viewMachine(m.id);
-    toast(`تسجّل.${tail}`);
+    toast(tr('تسجّل.', 'Logged.') + tail);
   }
 
   function chart(vals, label) {
@@ -871,14 +920,14 @@
     const li = vals.length - 1;
     return `<figure class="chart">
       <figcaption>${esc(label)}</figcaption>
-      <svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="${esc(label)}: من ${fmt(vals[0])} إلى ${fmt(vals[li])}">
+      <svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="${esc(label)}: ${tr('من', 'from')} ${fmt(vals[0])} ${tr('إلى', 'to')} ${fmt(vals[li])}">
         <line class="base" x1="0" x2="${Wd}" y1="${H - 1}" y2="${H - 1}"/>
         <polyline points="${pts}"/>
         ${vals.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === li ? 5.5 : 3.5}"${i === li ? ' class="last"' : ''}/>`).join('')}
         <text x="${x(0).toFixed(1)}" y="${(y(vals[0]) - 11).toFixed(1)}" text-anchor="start">${fmt(vals[0])}</text>
         <text x="${x(li).toFixed(1)}" y="${(y(vals[li]) - 11).toFixed(1)}" text-anchor="end" class="hi">${fmt(vals[li])}</text>
       </svg>
-      <div class="chart-x"><span>الأقدم</span><span>الأحدث</span></div>
+      <div class="chart-x"><span>${tr('الأقدم', 'Oldest')}</span><span>${tr('الأحدث', 'Newest')}</span></div>
     </figure>`;
   }
 
@@ -886,12 +935,13 @@
     const el = $('#hist');
     if (!el) return;
     const ls = logsOf(m.id);
-    let html = '<h2 class="h2">سجلك على هالجهاز</h2>';
+    let html = `<h2 class="h2">${tr('سجلك على هالجهاز', 'Your history on this machine')}</h2>`;
     if (!ls.length) {
-      el.innerHTML = html + '<p class="empty">أول تسجيل لك يطلع هنا، ومعه رسم يوضح تقدمك مع الوقت.</p>';
+      el.innerHTML = html + `<p class="empty">${tr('أول تسجيل لك يطلع هنا، ومعه رسم يوضح تقدمك مع الوقت.', 'Your first entry shows up here, with a chart of your progress over time.')}</p>`;
       return;
     }
     const chron = ls.slice().reverse();
+    const times = tr('مرات التمرين', 'Sessions');
     let stats = [], series = [], label = '';
     if (m.k === 'w') {
       const u = F.u, U = unitName(u);
@@ -899,45 +949,46 @@
       const best = Math.max(...ls.flatMap(l => l.sets.map(s => cv(l, s))));
       const orm = Math.max(0, ...ls.flatMap(l => l.sets.filter(s => s.r > 0 && s.r <= 12).map(s => e1rm(cv(l, s), s.r))));
       stats = [
-        [fmt(best), `أعلى وزن (${U})`],
-        [orm ? fmt(Math.round(orm * 2) / 2) : '—', `أقصى وزن لعدة وحدة، تقدير (${U})`],
-        [ls.length, 'مرات التمرين']
+        [fmt(best), tr(`أعلى وزن (${U})`, `Top weight (${U})`)],
+        [orm ? fmt(Math.round(orm * 2) / 2) : '—', tr(`أقصى وزن لعدة وحدة، تقدير (${U})`, `Est. max for 1 rep (${U})`)],
+        [ls.length, times]
       ];
       series = chron.map(l => Math.max(...l.sets.map(s => cv(l, s))));
-      label = `أعلى وزن كل مرة (${U})`;
+      label = tr(`أعلى وزن كل مرة (${U})`, `Top weight each session (${U})`);
     } else if (m.k === 'bw') {
       stats = [
-        [Math.max(...ls.flatMap(l => l.sets.map(s => s.r))), 'أعلى عدات بجلسة'],
-        [ls[0].sets.reduce((a, s) => a + s.r, 0), 'مجموع عدات آخر مرة'],
-        [ls.length, 'مرات التمرين']
+        [Math.max(...ls.flatMap(l => l.sets.map(s => s.r))), tr('أعلى عدات بجلسة', 'Most reps in a set')],
+        [ls[0].sets.reduce((a, s) => a + s.r, 0), tr('مجموع عدات آخر مرة', 'Total reps last time')],
+        [ls.length, times]
       ];
       series = chron.map(l => l.sets.reduce((a, s) => a + s.r, 0));
-      label = 'مجموع العدات كل مرة';
+      label = tr('مجموع العدات كل مرة', 'Total reps each session');
     } else if (m.k === 't') {
       stats = [
-        [Math.max(...ls.flatMap(l => l.sets.map(s => s.s))), 'أطول ثبات (ثانية)'],
-        [ls[0].sets.length, 'جلسات آخر مرة'],
-        [ls.length, 'مرات التمرين']
+        [Math.max(...ls.flatMap(l => l.sets.map(s => s.s))), tr('أطول ثبات (ثانية)', 'Longest hold (sec)')],
+        [ls[0].sets.length, tr('جلسات آخر مرة', 'Sets last time')],
+        [ls.length, times]
       ];
       series = chron.map(l => Math.max(...l.sets.map(s => s.s)));
-      label = 'أطول ثبات كل مرة (ثانية)';
+      label = tr('أطول ثبات كل مرة (ثانية)', 'Longest hold each session (sec)');
     } else {
       const kms = ls.map(l => +l.km || 0);
       stats = [
-        [fmt(ls.reduce((a, l) => a + (+l.min || 0), 0)), 'مجموع الدقائق'],
-        [fmt(Math.max(...ls.map(l => +l.min || 0))), 'أطول مدة (دقيقة)'],
-        [Math.max(...kms) ? fmt(Math.max(...kms)) : String(ls.length), Math.max(...kms) ? 'أبعد مسافة (كم)' : 'مرات التمرين']
+        [fmt(ls.reduce((a, l) => a + (+l.min || 0), 0)), tr('مجموع الدقائق', 'Total minutes')],
+        [fmt(Math.max(...ls.map(l => +l.min || 0))), tr('أطول مدة (دقيقة)', 'Longest session (min)')],
+        [Math.max(...kms) ? fmt(Math.max(...kms)) : String(ls.length), Math.max(...kms) ? tr('أبعد مسافة (كم)', 'Farthest distance (km)') : times]
       ];
       series = chron.map(l => +l.min || 0);
-      label = 'الدقائق كل مرة';
+      label = tr('الدقائق كل مرة', 'Minutes each session');
     }
     html += `<div class="stats">${stats.map(([v, l]) => `<div class="stat"><b>${esc(String(v))}</b><span>${esc(l)}</span></div>`).join('')}</div>`;
     if (series.length >= 2) html += chart(series.slice(-12), label);
     html += `<ul class="hlist">${ls.map(l => {
       const v = volU(l);
+      const day = dfDay.format(new Date(l.t));
       return `<li>
-        <div><b>${esc(summary(l))}</b><small>${dfDay.format(new Date(l.t))}${v ? `، المجموع ${fmt(v)} ${unitName(l.u)}` : ''}</small></div>
-        <button type="button" class="del" data-act="del-log" data-id="${esc(l.id)}" aria-label="احذف تسجيل ${esc(dfDay.format(new Date(l.t)))}">${I.trash}</button>
+        <div><b>${esc(summary(l))}</b><small>${day}${v ? `${SEP()}${tr('المجموع', 'total')} ${fmt(v)} ${unitName(l.u)}` : ''}</small></div>
+        <button type="button" class="del" data-act="del-log" data-id="${esc(l.id)}" aria-label="${tr('احذف تسجيل', 'Delete entry from')} ${esc(day)}">${I.trash}</button>
       </li>`;
     }).join('')}</ul>`;
     el.innerHTML = html;
@@ -959,22 +1010,22 @@
       g.items.push(l);
     });
     app.innerHTML = `
-      <header class="top small"><h1 class="title">السجل</h1></header>
-      <section class="board slim" aria-label="ملخص الأيام">
+      <header class="top small"><h1 class="title">${tr('السجل', 'Log')}</h1></header>
+      <section class="board slim" aria-label="${tr('ملخص الأيام', 'Days summary')}">
         <div class="board-cells">
-          <div><span class="led">${daysWeek}</span><span>أيام تمرين هالأسبوع</span></div>
-          <div><span class="led">${days30}</span><span>آخر 30 يوم</span></div>
-          <div><span class="led">${ls.length}</span><span>كل التسجيلات</span></div>
+          <div><span class="led">${daysWeek}</span><span>${tr('أيام تمرين هالأسبوع', 'Training days this week')}</span></div>
+          <div><span class="led">${days30}</span><span>${tr('آخر 30 يوم', 'Last 30 days')}</span></div>
+          <div><span class="led">${ls.length}</span><span>${tr('كل التسجيلات', 'All entries')}</span></div>
         </div>
       </section>
-      ${!ls.length ? '<p class="empty spaced">ما سجلت شي للحين. أول جهاز تسجله يطلع هنا مرتب حسب اليوم.</p>' : ''}
+      ${!ls.length ? `<p class="empty spaced">${tr('ما سجلت شي للحين. أول جهاز تسجله يطلع هنا مرتب حسب اليوم.', 'Nothing logged yet. Every machine you log shows up here, grouped by day.')}</p>` : ''}
       ${groups.map(g => {
         const exN = new Set(g.items.map(l => l.m)).size;
         return `<section class="day">
           <h2 class="day-h"><span>${dfDay.format(new Date(g.t))}${daysAgo(g.t) <= 1 ? ` <em>${rel(g.t)}</em>` : ''}</span><span class="kg">${numWord(exN, W.ex)}</span></h2>
           <div class="mlist">${g.items.map(l => {
             const m = mById(l.m);
-            const name = m ? m.n : (l.n || 'جهاز محذوف');
+            const name = m ? mName(m) : (l.n || tr('جهاز محذوف', 'Deleted machine'));
             const col = m ? secColor(m.s) : 'steel';
             return `<a class="mrow" href="${m ? '#/m/' + esc(m.id) : '#/log'}">
               ${m ? thumb(m) : `<span class="thumb thumb-plate c-${esc(col)}" aria-hidden="true"></span>`}
@@ -997,61 +1048,75 @@
 
   function viewSettings() {
     const hidden = S.hidden.map(mById).filter(Boolean);
+    const lb = lastBody();
     app.innerHTML = `
-      <header class="top small"><h1 class="title">الإعدادات</h1></header>
+      <header class="top small"><h1 class="title">${tr('الإعدادات', 'Settings')}</h1></header>
       <section class="card">
-        <h2>اسمك</h2>
+        <h2>${tr('اللغة', 'Language')}</h2>
+        <div class="seg light" role="group" aria-label="${tr('اللغة', 'Language')}">
+          <button type="button" data-lang="ar" lang="ar" aria-pressed="${!EN}">عربي</button>
+          <button type="button" data-lang="en" lang="en" aria-pressed="${EN}">English</button>
+        </div>
+      </section>
+      <section class="card">
+        <h2>${tr('اسمك', 'Your name')}</h2>
         <form class="name-row" id="nameForm" novalidate>
-          <input type="text" name="name" maxlength="24" value="${esc(S.name)}" aria-label="اسمك" autocomplete="given-name">
-          <button type="submit" class="btn">احفظ</button>
+          <input type="text" name="name" maxlength="24" value="${esc(S.name)}" aria-label="${tr('اسمك', 'Your name')}" autocomplete="given-name">
+          <button type="submit" class="btn">${tr('احفظ', 'Save')}</button>
         </form>
       </section>
       <section class="card">
-        <h2>وزن الجسم</h2>
-        <p>${lastBody() ? `آخر قياس ${fmt(lastBody().w)} ${unitName(lastBody().u)}، ${rel(lastBody().t)}.` : 'ما سجلت وزنك للحين.'}</p>
-        <button type="button" class="btn" data-act="body">سجّل وزنك اليوم</button>
+        <h2>${tr('وزن الجسم', 'Body weight')}</h2>
+        <p>${lb ? tr(`آخر قياس ${fmt(lb.w)} ${unitName(lb.u)}، ${rel(lb.t)}.`, `Last weigh-in: ${fmt(lb.w)} ${unitName(lb.u)}, ${rel(lb.t)}.`) : tr('ما سجلت وزنك للحين.', "You haven't logged your weight yet.")}</p>
+        <button type="button" class="btn" data-act="body">${tr('سجّل وزنك اليوم', "Log today's weight")}</button>
       </section>
       <section class="card">
-        <h2>الوحدة للأجهزة الجديدة</h2>
-        <p>كل جهاز يحفظ وحدته لحاله، فتقدر تخلي جهاز بالرطل وجهاز بالكيلو.</p>
-        <div class="seg light" role="group" aria-label="الوحدة الافتراضية">
-          <button type="button" data-unit="kg" aria-pressed="${S.prefs.unit === 'kg'}">كيلو (كجم)</button>
-          <button type="button" data-unit="lb" aria-pressed="${S.prefs.unit === 'lb'}">رطل (lb)</button>
+        <h2>${tr('الوحدة للأجهزة الجديدة', 'Unit for new machines')}</h2>
+        <p>${tr('كل جهاز يحفظ وحدته لحاله، فتقدر تخلي جهاز بالرطل وجهاز بالكيلو.', 'Each machine keeps its own unit, so one can be in pounds and another in kilograms.')}</p>
+        <div class="seg light" role="group" aria-label="${tr('الوحدة الافتراضية', 'Default unit')}">
+          <button type="button" data-unit="kg" aria-pressed="${S.prefs.unit === 'kg'}">${tr('كيلو (كجم)', 'Kilograms (kg)')}</button>
+          <button type="button" data-unit="lb" aria-pressed="${S.prefs.unit === 'lb'}">${tr('رطل (lb)', 'Pounds (lb)')}</button>
         </div>
       </section>
       <section class="card">
-        <h2>بياناتك</h2>
-        <p>كل تسجيلاتك محفوظة في هالجوال بس، ما تطلع لأي مكان. نزّل نسخة احتياطية كل فترة، عشان لو غيرت جوالك أو انمسح المتصفح ترجعها.</p>
+        <h2>${tr('بياناتك', 'Your data')}</h2>
+        <p>${tr('كل تسجيلاتك محفوظة في هالجوال بس، ما تطلع لأي مكان. نزّل نسخة احتياطية كل فترة، عشان لو غيرت جوالك أو انمسح المتصفح ترجعها.', 'Everything you log stays on this phone and is never sent anywhere. Download a backup now and then, so you can restore it if you change phones or the browser data gets cleared.')}</p>
         <div class="btn-row">
-          <button type="button" class="btn" id="exp">نزّل نسخة احتياطية</button>
-          <label class="btn">استرجع من نسخة<input type="file" id="imp" accept=".json,application/json" hidden></label>
-          <button type="button" class="btn" id="install" ${installEvt ? '' : 'hidden'}>ثبّت أوزاني على الجوال</button>
+          <button type="button" class="btn" id="exp">${tr('نزّل نسخة احتياطية', 'Download backup')}</button>
+          <label class="btn">${tr('استرجع من نسخة', 'Restore from backup')}<input type="file" id="imp" accept=".json,application/json" hidden></label>
+          <button type="button" class="btn" id="install" ${installEvt ? '' : 'hidden'}>${tr('ثبّت أوزاني على الجوال', 'Install Awzani on your phone')}</button>
         </div>
-        <p class="note">نصيحة للآيفون: افتح الموقع من سفاري، اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية». يصير مثل التطبيق، ويشتغل حتى لو النت ضعيف في النادي.</p>
+        <p class="note">${tr('نصيحة للآيفون: افتح الموقع من سفاري، اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية». يصير مثل التطبيق، ويشتغل حتى لو النت ضعيف في النادي.', 'iPhone tip: open the site in Safari, tap Share, then "Add to Home Screen". It works like an app, even when the gym signal is weak.')}</p>
       </section>
       ${hidden.length ? `<section class="card">
-        <h2>الأجهزة المخفية</h2>
-        <ul class="plain">${hidden.map(m => `<li><span>${esc(m.n)}<small>${esc((secById(m.s) || {}).name || '')}</small></span><button type="button" class="btn sm" data-act="unhide" data-id="${esc(m.id)}">رجّعه</button></li>`).join('')}</ul>
+        <h2>${tr('الأجهزة المخفية', 'Hidden machines')}</h2>
+        <ul class="plain">${hidden.map(m => `<li><span>${esc(mName(m))}<small>${esc(secName(secById(m.s)))}</small></span><button type="button" class="btn sm" data-act="unhide" data-id="${esc(m.id)}">${tr('رجّعه', 'Show it')}</button></li>`).join('')}</ul>
       </section>` : ''}
       <section class="card">
-        <h2>عن أوزاني</h2>
-        <p>${plural(D.machines.length, W.mc)} في ${plural(D.sections.length, ['قسم واحد', 'قسمين', 'أقسام', 'قسم'])}، وتقدر تضيف أجهزة وأقسام نادك. الاقتراح يمشي على قاعدة بسيطة: لما توصل 12 عدة بكل الجلسات زِد الوزن، وارجع لـ 8 عدات.</p>
-        <p class="note">صور التمارين من مجموعة <bdi dir="ltr">free-exercise-db</bdi> المفتوحة، وهي ملكية عامة.</p>
-        <button type="button" class="text-btn danger" id="wipe">امسح كل بياناتي</button>
+        <h2>${tr('عن أوزاني', 'About Awzani')}</h2>
+        <p>${tr(`${plural(D.machines.length, W.mc)} في ${plural(D.sections.length, W.sc)}، وتقدر تضيف أجهزة وأقسام نادك. الاقتراح يمشي على قاعدة بسيطة: لما توصل 12 عدة بكل الجلسات زِد الوزن، وارجع لـ 8 عدات.`,
+          `${plural(D.machines.length, W.mc)} in ${plural(D.sections.length, W.sc)}, and you can add your own gym's machines and sections. The hint follows a simple rule: once you hit 12 reps in every set, add weight and go back to 8 reps.`)}</p>
+        <p class="note">${tr('صور التمارين من مجموعة <bdi dir="ltr">free-exercise-db</bdi> المفتوحة، وهي ملكية عامة.', 'Exercise photos come from the open <bdi>free-exercise-db</bdi> collection, in the public domain.')}</p>
+        <button type="button" class="text-btn danger" id="wipe">${tr('امسح كل بياناتي', 'Delete all my data')}</button>
       </section>`;
 
+    $$('[data-lang]').forEach(b => b.addEventListener('click', () => {
+      if ((b.dataset.lang === 'en') === EN) return;
+      setLang(b.dataset.lang);
+      route();
+    }));
     $$('[data-unit]').forEach(b => b.addEventListener('click', () => {
       S.prefs.unit = b.dataset.unit;
       save();
       $$('[data-unit]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.unit === S.prefs.unit)));
-      toast(`الأجهزة الجديدة صارت بال${S.prefs.unit === 'lb' ? 'رطل' : 'كيلو'}.`);
+      toast(tr(`الأجهزة الجديدة صارت بال${S.prefs.unit === 'lb' ? 'رطل' : 'كيلو'}.`, `New machines now use ${S.prefs.unit === 'lb' ? 'pounds' : 'kilograms'}.`));
     }));
     $('#nameForm').addEventListener('submit', e => {
       e.preventDefault();
       const n = String(new FormData(e.target).get('name') || '').trim();
-      if (!n) { toast('اكتب اسمك.'); return; }
+      if (!n) { toast(tr('اكتب اسمك.', 'Type your name.')); return; }
       S.name = n.slice(0, 24);
-      if (save()) toast(`تمام يا ${S.name}، انحفظ اسمك.`);
+      if (save()) toast(tr(`تمام يا ${S.name}، انحفظ اسمك.`, `Done, ${S.name}. Your name is saved.`));
     });
     $('#exp').addEventListener('click', exportData);
     $('#imp').addEventListener('change', importData);
@@ -1063,10 +1128,12 @@
       $('#install').hidden = true;
     });
     $('#wipe').addEventListener('click', () => {
-      if (!confirm('أكيد؟ بينمسح كل تسجيلاتك وأجهزتك المضافة من هالجوال، وما ترجع إلا من نسخة احتياطية.')) return;
+      if (!confirm(tr('أكيد؟ بينمسح كل تسجيلاتك وأجهزتك المضافة من هالجوال، وما ترجع إلا من نسخة احتياطية.', 'Are you sure? This deletes all your entries and added machines from this phone. Only a backup can bring them back.'))) return;
+      const lang = S.prefs.lang;
       S = blank();
+      S.prefs.lang = lang;
       save();
-      toast('انمسحت كل البيانات.');
+      toast(tr('انمسحت كل البيانات.', 'All data deleted.'));
       location.hash = '#/';
     });
   }
@@ -1078,7 +1145,7 @@
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    toast('نزلت النسخة. احفظها في مكان آمن.');
+    toast(tr('نزلت النسخة. احفظها في مكان آمن.', 'Backup downloaded. Keep it somewhere safe.'));
   }
   function importData(e) {
     const file = e.target.files && e.target.files[0];
@@ -1086,7 +1153,7 @@
     const rd = new FileReader();
     rd.onload = () => {
       let inc;
-      try { inc = normalize(JSON.parse(rd.result)); } catch (err) { toast('الملف هذا مو نسخة من أوزاني.'); return; }
+      try { inc = normalize(JSON.parse(rd.result)); } catch (err) { toast(tr('الملف هذا مو نسخة من أوزاني.', "This file isn't an Awzani backup.")); return; }
       const ids = new Set(S.logs.map(l => l.id));
       let added = 0;
       inc.logs.forEach(l => { if (!ids.has(l.id)) { S.logs.push(l); added++; } });
@@ -1101,7 +1168,7 @@
       S.body.sort((a, z) => a.t - z.t);
       Object.assign(S.prefs.mu, inc.prefs.mu);
       Object.assign(S.prefs.step, inc.prefs.step);
-      if (save()) toast(added ? `رجعت ${plural(added, W.log)}.` : 'كل اللي في النسخة موجود عندك من قبل.');
+      if (save()) toast(added ? tr(`رجعت ${plural(added, W.log)}.`, `Restored ${plural(added, W.log)}.`) : tr('كل اللي في النسخة موجود عندك من قبل.', 'Everything in this backup is already here.'));
       route();
     };
     rd.readAsText(file);
@@ -1112,7 +1179,7 @@
   function openSheet(inner, onOk, okLabel) {
     const d = $('#sheet');
     d.innerHTML = `<form class="sheet" novalidate>${inner}
-      <div class="sheet-act"><button class="go" type="submit">${okLabel ? I.check : I.plus}<span>${okLabel || 'أضف'}</span></button><button class="ghost" type="button" data-close>إلغاء</button></div>
+      <div class="sheet-act"><button class="go" type="submit">${okLabel ? I.check : I.plus}<span>${okLabel || tr('أضف', 'Add')}</span></button><button class="ghost" type="button" data-close>${tr('إلغاء', 'Cancel')}</button></div>
     </form>`;
     const form = $('form', d);
     form.addEventListener('submit', e => {
@@ -1127,30 +1194,31 @@
   function openPhoto(m) {
     if (!hasPhoto(m)) return;
     const d = $('#sheet');
+    const name = mName(m);
     d.innerHTML = `<div class="sheet viewer">
-      <h2>${esc(m.n)}</h2>
-      ${frames(m, 'صورة توضيحية لتمرين ' + m.n)}
-      <p class="viewer-cap">الصورتين توضح بداية الحركة ونهايتها.</p>
-      <button class="ghost wide" type="button" data-close>إغلاق</button>
+      <h2>${esc(name)}</h2>
+      ${frames(m, tr('صورة توضيحية لتمرين ', 'Demo photo of ') + name)}
+      <p class="viewer-cap">${tr('الصورتين توضح بداية الحركة ونهايتها.', 'The two photos show the start and the end of the movement.')}</p>
+      <button class="ghost wide" type="button" data-close>${tr('إغلاق', 'Close')}</button>
     </div>`;
     $('[data-close]', d).addEventListener('click', () => d.close());
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
   }
   const KIND_OPTS = [
-    ['w:mc', 'وزن على جهاز'], ['w:bar', 'بار وأقراص'], ['w:db', 'دمبل'], ['w:cb', 'كيبل'],
-    ['w:pl', 'جهاز تركّب فيه أقراص'], ['bw', 'وزن الجسم'], ['t', 'وقت بالثواني'], ['c', 'كارديو بالدقائق']
+    ['w:mc', 'وزن على جهاز', 'Machine weight'], ['w:bar', 'بار وأقراص', 'Barbell and plates'], ['w:db', 'دمبل', 'Dumbbells'], ['w:cb', 'كيبل', 'Cable'],
+    ['w:pl', 'جهاز تركّب فيه أقراص', 'Plate-loaded machine'], ['bw', 'وزن الجسم', 'Bodyweight'], ['t', 'وقت بالثواني', 'Time in seconds'], ['c', 'كارديو بالدقائق', 'Cardio in minutes']
   ];
   function addMachineSheet(secId) {
     const sec = secById(secId);
     const def = secId === 'cardio' ? 'c' : 'w:mc';
     openSheet(`
-      <h2>أضف جهاز في ${esc(sec.name)}</h2>
-      <label class="fld"><span>اسم الجهاز</span><input type="text" name="n" maxlength="40" placeholder="مثل: تشيست برس هامر سترنث" autocomplete="off"></label>
-      <fieldset class="fld"><legend>وش تسجل فيه؟</legend>
-        <div class="opts">${KIND_OPTS.map(([v, l]) => `<label class="opt"><input type="radio" name="k" value="${v}" ${v === def ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+      <h2>${tr(`أضف جهاز في ${esc(secName(sec))}`, `Add a machine to ${esc(secName(sec))}`)}</h2>
+      <label class="fld"><span>${tr('اسم الجهاز', 'Machine name')}</span><input type="text" name="n" maxlength="40" placeholder="${tr('مثل: تشيست برس هامر سترنث', 'e.g. Hammer Strength chest press')}" autocomplete="off"></label>
+      <fieldset class="fld"><legend>${tr('وش تسجل فيه؟', 'What do you log on it?')}</legend>
+        <div class="opts">${KIND_OPTS.map(([v, a, en]) => `<label class="opt"><input type="radio" name="k" value="${v}" ${v === def ? 'checked' : ''}><span>${tr(a, en)}</span></label>`).join('')}</div>
       </fieldset>`, fd => {
       const n = String(fd.get('n') || '').trim();
-      if (!n) { toast('اكتب اسم الجهاز.'); return false; }
+      if (!n) { toast(tr('اكتب اسم الجهاز.', 'Type the machine name.')); return false; }
       const [k, eq] = String(fd.get('k') || 'w:mc').split(':');
       const m = { id: 'u-' + uid(), s: secId, n: n.slice(0, 40), e: '', k, custom: true };
       if (k === 'w') m.eq = eq || 'mc';
@@ -1158,20 +1226,20 @@
       S.custom.machines.push(m);
       if (!save()) return false;
       location.hash = '#/m/' + m.id;
-      toast('انضاف الجهاز.');
+      toast(tr('انضاف الجهاز.', 'Machine added.'));
     });
   }
   function addSectionSheet() {
     openSheet(`
-      <h2>قسم جديد</h2>
-      <label class="fld"><span>اسم القسم</span><input type="text" name="n" maxlength="24" placeholder="مثل: الإطالة، الجسم كامل، السباحة" autocomplete="off"></label>`, fd => {
+      <h2>${tr('قسم جديد', 'New section')}</h2>
+      <label class="fld"><span>${tr('اسم القسم', 'Section name')}</span><input type="text" name="n" maxlength="24" placeholder="${tr('مثل: الإطالة، الجسم كامل، السباحة', 'e.g. Stretching, Full body, Swimming')}" autocomplete="off"></label>`, fd => {
       const n = String(fd.get('n') || '').trim();
-      if (!n) { toast('اكتب اسم القسم.'); return false; }
+      if (!n) { toast(tr('اكتب اسم القسم.', 'Type the section name.')); return false; }
       const s = { id: 'u-' + uid(), name: n.slice(0, 24), color: 'steel', custom: true };
       S.custom.sections.push(s);
       if (!save()) return false;
       location.hash = '#/s/' + s.id;
-      toast('انضاف القسم. أضف أجهزته.');
+      toast(tr('انضاف القسم. أضف أجهزته.', 'Section added. Now add its machines.'));
     });
   }
 
@@ -1180,48 +1248,56 @@
     const a = e.target.closest('[data-act]');
     if (!a) return;
     const act = a.dataset.act;
-    if (act === 'add-sec') addSectionSheet();
+    if (act === 'lang') {
+      const inp = $('#startForm input');
+      const keep = inp ? inp.value : '';
+      setLang(EN ? 'ar' : 'en');
+      if (!S.name) { viewStart(keep); return; }
+      route();
+    }
+    else if (act === 'add-sec') addSectionSheet();
     else if (act === 'body') bodySheet();
     else if (act === 'photo') openPhoto(mById(curM));
     else if (act === 'add-m') addMachineSheet(curSec);
     else if (act === 'del-log') {
-      if (!confirm('تحذف هالتسجيل؟')) return;
+      if (!confirm(tr('تحذف هالتسجيل؟', 'Delete this entry?'))) return;
       S.logs = S.logs.filter(l => l.id !== a.dataset.id);
       save();
       const m = mById(curM);
       if (m) viewMachine(m.id); else route();
-      toast('انحذف التسجيل.');
+      toast(tr('انحذف التسجيل.', 'Entry deleted.'));
     } else if (act === 'hide-m') {
       const m = mById(curM);
       if (!S.hidden.includes(m.id)) S.hidden.push(m.id);
       save();
       location.hash = '#/s/' + m.s;
-      toast('انخفى الجهاز. ترجعه من الإعدادات.');
+      toast(tr('انخفى الجهاز. ترجعه من الإعدادات.', 'Machine hidden. You can bring it back in Settings.'));
     } else if (act === 'del-m') {
       const m = mById(curM);
-      if (!confirm(`تحذف «${m.n}»؟ تسجيلاته القديمة تبقى في السجل.`)) return;
+      if (!confirm(tr(`تحذف «${m.n}»؟ تسجيلاته القديمة تبقى في السجل.`, `Delete "${mName(m)}"? Its old entries stay in the log.`))) return;
       S.custom.machines = S.custom.machines.filter(x => x.id !== m.id);
       save();
       location.hash = '#/s/' + m.s;
-      toast('انحذف الجهاز.');
+      toast(tr('انحذف الجهاز.', 'Machine deleted.'));
     } else if (act === 'del-sec') {
       const sec = secById(curSec);
-      if (!confirm(`تحذف قسم «${sec.name}»؟ الأجهزة اللي أضفتها فيه تنحذف، وتسجيلاتها تبقى في السجل.`)) return;
+      if (!confirm(tr(`تحذف قسم «${sec.name}»؟ الأجهزة اللي أضفتها فيه تنحذف، وتسجيلاتها تبقى في السجل.`, `Delete the "${secName(sec)}" section? Machines you added to it are deleted; their entries stay in the log.`))) return;
       S.custom.sections = S.custom.sections.filter(x => x.id !== sec.id);
       S.custom.machines = S.custom.machines.filter(x => x.s !== sec.id);
       save();
       location.hash = '#/';
-      toast('انحذف القسم.');
+      toast(tr('انحذف القسم.', 'Section deleted.'));
     } else if (act === 'unhide') {
       S.hidden = S.hidden.filter(h => h !== a.dataset.id);
       save();
       viewSettings();
-      toast('رجع الجهاز لقسمه.');
+      toast(tr('رجع الجهاز لقسمه.', 'The machine is back in its section.'));
     }
   });
 
   window.addEventListener('hashchange', route);
-  window.addEventListener('storage', e => { if (e.key === KEY) { S = load(); route(); } });
+  window.addEventListener('storage', e => { if (e.key === KEY) { S = load(); applyLang(); route(); } });
+  applyLang();
   route();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

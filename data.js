@@ -2,16 +2,17 @@
    k: نوع التسجيل   w = وزن × عدات × جلسات | bw = وزن الجسم | t = وقت | c = كارديو
    eq: نوع الوزن     bar = بار أولمبي | sm = سميث | db = دمبل | mc = جهاز | cb = كيبل | pl = جهاز بأقراص | ez = بار قصير
    lv: اسم خانة المستوى في الكارديو
-   l: تسمية خاصة لخانة الوزن */
+   l / le: تسمية خاصة لخانة الوزن (عربي / English)
+   en في الأقسام: الاسم بالإنجليزي */
 window.AWZ_DATA = {
   sections: [
-    { id: 'chest',     name: 'الصدر',    color: 'red' },
-    { id: 'back',      name: 'الظهر',    color: 'blue' },
-    { id: 'legs',      name: 'الأرجل',   color: 'yellow' },
-    { id: 'shoulders', name: 'الأكتاف',  color: 'green' },
-    { id: 'arms',      name: 'الذراع',   color: 'white' },
-    { id: 'abs',       name: 'البطن',    color: 'silver' },
-    { id: 'cardio',    name: 'الكارديو', color: 'black' }
+    { id: 'chest',     name: 'الصدر', en: 'Chest',    color: 'red' },
+    { id: 'back',      name: 'الظهر', en: 'Back',    color: 'blue' },
+    { id: 'legs',      name: 'الأرجل', en: 'Legs',   color: 'yellow' },
+    { id: 'shoulders', name: 'الأكتاف', en: 'Shoulders',  color: 'green' },
+    { id: 'arms',      name: 'الذراع', en: 'Arms',   color: 'white' },
+    { id: 'abs',       name: 'البطن', en: 'Abs',    color: 'silver' },
+    { id: 'cardio',    name: 'الكارديو', en: 'Cardio', color: 'black' }
   ],
   machines: [
     // الصدر
@@ -40,7 +41,7 @@ window.AWZ_DATA = {
     { id: 'deadlift',         s: 'back', n: 'ديدلفت',                e: 'Deadlift',                 k: 'w', eq: 'bar' },
     { id: 'straight-arm',     s: 'back', n: 'بول أوفر بالكيبل',      e: 'Straight-arm Pulldown',    k: 'w', eq: 'cb' },
     { id: 'pullup',           s: 'back', n: 'عقلة',                  e: 'Pull-up',                  k: 'bw' },
-    { id: 'assist-pullup',    s: 'back', n: 'عقلة مساعدة (جهاز)',    e: 'Assisted Pull-up',         k: 'w', eq: 'mc', l: 'وزن المساعدة' },
+    { id: 'assist-pullup',    s: 'back', n: 'عقلة مساعدة (جهاز)',    e: 'Assisted Pull-up',         k: 'w', eq: 'mc', l: 'وزن المساعدة', le: 'Assistance weight' },
     { id: 'back-ext',         s: 'back', n: 'باك إكستنشن',           e: 'Back Extension',           k: 'bw' },
 
     // الأرجل

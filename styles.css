@@ -661,6 +661,24 @@ dialog::backdrop { background: rgba(8, 10, 11, .5); }
 .sheet-act { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .ghost { height: 60px; margin-top: 14px; padding: 0 22px; border: 1px solid var(--line); border-radius: 16px; background: transparent; font-size: 16px; }
 
+/* ---------- اللغة (عربي / English) ---------- */
+.today-head .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.today-head .head-row .brand { margin: 0; }
+.lang-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); color: var(--ink);
+  font-size: 14px; font-weight: 600;
+}
+.lang-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.lang-btn:active { background: var(--raise); }
+.start { position: relative; }
+.start-lang { position: absolute; top: 14px; inset-inline-end: 0; }
+[dir="ltr"] .back svg, [dir="ltr"] .mrow > svg { transform: scaleX(-1); }
+[dir="ltr"] .stat b { text-align: left; }
+[dir="ltr"] .start-board .mark { font-size: clamp(80px, 25vw, 120px); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
