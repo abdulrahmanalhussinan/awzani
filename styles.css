@@ -778,6 +778,7 @@ button.chip { cursor: pointer; }
 .bs-main { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 6px 0 14px; }
 .bs-w { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .bs-w .led-xl { font-size: clamp(76px, 22vw, 108px); }
+.bs-w .led-xl.long { font-size: clamp(58px, 16vw, 80px); }
 .bs-d {
   display: flex; flex-direction: column; gap: 2px;
   padding-inline-start: 14px; border-inline-start: 1px solid rgba(255, 255, 255, .14);

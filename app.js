@@ -468,7 +468,7 @@
   function bodySheet() {
     const last = lastBody();
     let u = S.prefs.bu || (last ? last.u : S.prefs.unit);
-    let w = last ? r1(conv(last.w, last.u, u)) : (u === 'lb' ? 160 : 75);
+    let w = last ? round2(conv(last.w, last.u, u)) : (u === 'lb' ? 160 : 75);
     const recent = S.body.slice(-6).reverse();
     openSheet(`
       <h2>${tr('وزن جسمك اليوم', 'Your body weight today')}</h2>
@@ -1383,7 +1383,6 @@
   const wkName = k => (EN ? `Week ${k}` : k <= 10 ? `الأسبوع ${ORD[k - 1]}` : `الأسبوع ${k}`);
   const addDays = (t, n) => { const d = new Date(startOfDay(t)); d.setDate(d.getDate() + n); return d.getTime(); };
   const dayIdx = (a, b) => Math.round((startOfDay(b) - startOfDay(a)) / 864e5);
-  const r1 = n => Math.round(n * 10) / 10;
   const pad2 = n => String(n).padStart(2, '0');
   const isoDay = t => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
   function parseIso(s) {
@@ -1397,7 +1396,7 @@
     try { return dfShort.formatRange(new Date(a), new Date(b)); } catch (e) { return `${dfShort.format(new Date(a))} – ${dfShort.format(new Date(b))}`; }
   };
   const bodyU = () => S.prefs.bu || (lastBody() ? lastBody().u : S.prefs.unit);
-  const bwAs = (x, u) => r1(conv(x.w, x.u, u));
+  const bwAs = (x, u) => round2(conv(x.w, x.u, u));
   const bodyAt = t => S.body.find(x => dayKey(x.t) === dayKey(t)) || null;
   const startE = () => (S.bstart ? bodyAt(S.bstart) : null);
   const diffTxt = v => (v ? signed(v) : '0');
@@ -1414,16 +1413,16 @@
     let prev = sw;
     for (let k = 1; k <= nowK; k++) {
       const list = es.filter(e => Math.ceil(e.n / 7) === k).sort((a, z) => a.n - z.n);
-      const avg = list.length ? r1(list.reduce((a, e) => a + e.w, 0) / list.length) : null;
+      const avg = list.length ? Math.round(list.reduce((a, e) => a + Math.round(e.w * 100), 0) / list.length) / 100 : null; // بالضبط لخانتين
       const from = addDays(s0, 7 * (k - 1) + 1), to = addDays(s0, 7 * k);
       const days = [];
       for (let i = 0; i < 7; i++) days.push(addDays(from, i));
       const open = days.filter(t => t <= t0 && !list.some(e => dayKey(e.x.t) === dayKey(t))).length;
-      weeks.push({ k, from, to, days, list, avg, open, dl: avg == null ? null : r1(avg - prev), now: k === nowK, started: from <= t0 });
+      weeks.push({ k, from, to, days, list, avg, open, dl: avg == null ? null : round2(avg - prev), now: k === nowK, started: from <= t0 });
       if (avg != null) prev = avg;
     }
     const lastE = es.reduce((a, e) => (!a || e.x.t > a.x.t ? e : a), null);
-    return { u, s, sw, s0, t0, nowK, weeks, lastE, diff: lastE ? r1(lastE.w - sw) : null };
+    return { u, s, sw, s0, t0, nowK, weeks, lastE, diff: lastE ? round2(lastE.w - sw) : null };
   }
 
   function weekCard(w, d) {
@@ -1475,7 +1474,7 @@
     html += `<section class="board bstart" aria-label="${tr('وزن البداية', 'Starting weight')}">
         <div class="board-top"><span>${tr('وزن البداية', 'Starting weight')}</span><button type="button" class="bd-btn" data-act="b-start">${tr('عدّل', 'Edit')}</button></div>
         <div class="bs-main">
-          <span class="bs-w"><span class="led led-xl" id="bsW">${fmt(d.sw)}</span><span class="board-u">${unitName(d.u)}</span></span>
+          <span class="bs-w"><span class="led led-xl${fmt(d.sw).length > 4 ? ' long' : ''}" id="bsW">${fmt(d.sw)}</span><span class="board-u">${unitName(d.u)}</span></span>
           <span class="bs-d"><b>${dfWeek.format(new Date(d.s0))}</b><span>${dfDate.format(new Date(d.s0))}</span></span>
         </div>
         <div class="board-cells" style="--n:3">
@@ -1599,7 +1598,7 @@
   const mList = () => MKEYS.map(([k, a, e]) => ({ k, n: tr(a, e) })).concat(S.mx.map(x => ({ k: x.id, n: x.n, custom: true })));
   const measU = () => (S.prefs.lu === 'in' ? 'in' : 'cm');
   const luName = u => (u === 'in' ? tr('إنش', 'in') : tr('سم', 'cm'));
-  const mAs = (v, from, to) => r1(from === to ? v : to === 'in' ? v / 2.54 : v * 2.54);
+  const mAs = (v, from, to) => round2(from === to ? v : to === 'in' ? v / 2.54 : v * 2.54);
   const measById = id => S.meas.find(x => x.id === id);
   let MC = null;
 
@@ -1640,7 +1639,7 @@
             <thead><tr><th scope="col">${tr('الجزء', 'Part')}</th><th scope="col">${esc(dfShort.format(new Date(A.t)))}</th><th scope="col">${esc(dfShort.format(new Date(B.t)))}</th><th scope="col">${tr('الفرق', 'Change')}</th></tr></thead>
             <tbody>${keys.map(m => {
               const a = val(A, m.k), b = val(B, m.k);
-              const df = a != null && b != null ? r1(b - a) : null;
+              const df = a != null && b != null ? round2(b - a) : null;
               return `<tr><th scope="row">${esc(m.n)}</th><td class="mc-a">${a == null ? '—' : fmt(a)}</td><td class="mc-b"><span class="led">${b == null ? '—' : fmt(b)}</span></td><td class="mc-d${df > 0 ? ' up' : df < 0 ? ' down' : ''}">${df == null ? '' : diffTxt(df)}</td></tr>`;
             }).join('')}</tbody>
           </table>
