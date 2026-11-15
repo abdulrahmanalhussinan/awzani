@@ -48,7 +48,8 @@
     log: [['تسجيل واحد', 'تسجيلين', 'تسجيلات', 'تسجيل'], ['entry', 'entries']],
     ex: [['تمرين واحد', 'تمرينين', 'تمارين', 'تمرين'], ['exercise', 'exercises']],
     sc: [['قسم واحد', 'قسمين', 'أقسام', 'قسم'], ['section', 'sections']],
-    wk: [['أسبوع واحد', 'أسبوعين', 'أسابيع', 'أسبوع'], ['week', 'weeks']]
+    wk: [['أسبوع واحد', 'أسبوعين', 'أسابيع', 'أسبوع'], ['week', 'weeks']],
+    ms: [['قياس واحد', 'قياسين', 'قياسات', 'قياس'], ['measurement', 'measurements']]
   };
   // الكلمة بدون الرقم: 1 تمرين، 2 تمرينين، 3-10 تمارين، 11+ تمرين
   const exWord = n => (EN ? (n === 1 ? 'exercise' : 'exercises') : n === 2 ? 'تمرينين' : n >= 3 && n <= 10 ? 'تمارين' : 'تمرين');
@@ -99,7 +100,7 @@
   const okStr = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max;
 
   function blank() {
-    return { v: 1, name: '', body: [], logs: [], plans: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', lang: 'ar', mu: {}, step: {} } };
+    return { v: 1, name: '', body: [], bstart: 0, meas: [], mx: [], logs: [], plans: [], custom: { sections: [], machines: [] }, hidden: [], prefs: { unit: 'kg', lang: 'ar', bu: '', lu: 'cm', mu: {}, step: {} } };
   }
   function cleanSets(sets, k) {
     if (!Array.isArray(sets)) return null;
@@ -153,9 +154,29 @@
       });
       b.body.sort((a, z) => a.t - z.t);
     }
+    if (+o.bstart > 0) {
+      const s0 = startOfDay(+o.bstart);
+      if (b.body.some(x => startOfDay(x.t) === s0)) b.bstart = s0;
+    }
+    if (Array.isArray(o.mx)) {
+      o.mx.slice(0, 30).forEach(x => {
+        if (x && okId(x.id) && okStr(x.n, 40) && !b.mx.some(y => y.id === x.id)) b.mx.push({ id: x.id, n: x.n.trim().slice(0, 24) });
+      });
+    }
+    if (Array.isArray(o.meas)) {
+      o.meas.slice(0, 600).forEach(x => {
+        if (!x || !okId(x.id) || !isFinite(+x.t) || !x.v || typeof x.v !== 'object' || b.meas.some(y => y.id === x.id)) return;
+        const v = {};
+        Object.entries(x.v).slice(0, 60).forEach(([k, n]) => { if (okId(k) && +n > 0 && +n < 400) v[k] = round2(+n); });
+        if (Object.keys(v).length) b.meas.push({ id: x.id, t: +x.t, u: x.u === 'in' ? 'in' : 'cm', v });
+      });
+      b.meas.sort((a, z) => a.t - z.t);
+    }
     if (o.prefs) {
       b.prefs.unit = o.prefs.unit === 'lb' ? 'lb' : 'kg';
       b.prefs.lang = o.prefs.lang === 'en' ? 'en' : 'ar';
+      b.prefs.bu = o.prefs.bu === 'lb' || o.prefs.bu === 'kg' ? o.prefs.bu : '';
+      b.prefs.lu = o.prefs.lu === 'in' ? 'in' : 'cm';
       Object.entries(o.prefs.mu || {}).forEach(([k, v]) => { if (okId(k)) b.prefs.mu[k] = v === 'lb' ? 'lb' : 'kg'; });
       Object.entries(o.prefs.step || {}).forEach(([k, v]) => { if (okId(k) && +v > 0) b.prefs.step[k] = +v; });
     }
@@ -337,7 +358,7 @@
     h.dir = EN ? 'ltr' : 'rtl';
     document.title = tr('أوزاني | حسبة أوزان النادي', 'Awzani | Gym weight log');
     setLocale();
-    const nav = { home: tr('الأقسام', 'Sections'), plan: tr('جدولي', 'My plans'), log: tr('السجل', 'Log'), set: tr('الإعدادات', 'Settings') };
+    const nav = { home: tr('الأقسام', 'Sections'), plan: tr('جدولي', 'My plans'), body: tr('وزن الجسم', 'Weight'), meas: tr('القياسات', 'Measures'), log: tr('السجل', 'Log'), set: tr('الإعدادات', 'Settings') };
     $$('.tabs a').forEach(a => { const s = $('span', a); if (s) s.textContent = nav[a.dataset.v] || s.textContent; });
     const tabs = $('.tabs');
     if (tabs) tabs.setAttribute('aria-label', tr('التنقل', 'Navigation'));
@@ -389,6 +410,10 @@
     if (v === 'plan' && planById(id)) { setNav('plan'); return viewPlan(id); }
     if (v === 'plan-new') { setNav('plan'); return viewPlanEdit(null, id); }
     if (v === 'plan-edit' && planById(id)) { setNav('plan'); return viewPlanEdit(id); }
+    if (v === 'body') { setNav('body'); return viewBody(); }
+    if (v === 'meas') { setNav('meas'); return viewMeas(); }
+    if (v === 'meas-new') { setNav('meas'); return viewMeasEdit(null); }
+    if (v === 'meas-edit' && measById(id)) { setNav('meas'); return viewMeasEdit(id); }
     if (v === 'log') { setNav('log'); return viewLog(); }
     if (v === 'set') { setNav('set'); return viewSettings(); }
     setNav('home');
@@ -442,8 +467,8 @@
   const lastBody = () => S.body[S.body.length - 1] || null;
   function bodySheet() {
     const last = lastBody();
-    let u = last ? last.u : S.prefs.unit;
-    let w = last ? last.w : (u === 'lb' ? 160 : 75);
+    let u = S.prefs.bu || (last ? last.u : S.prefs.unit);
+    let w = last ? r1(conv(last.w, last.u, u)) : (u === 'lb' ? 160 : 75);
     const recent = S.body.slice(-6).reverse();
     openSheet(`
       <h2>${tr('وزن جسمك اليوم', 'Your body weight today')}</h2>
@@ -460,7 +485,8 @@
         const prev = recent[i + 1];
         const d = prev && prev.u === x.u ? round2(x.w - prev.w) : 0;
         return `<li><span>${dfDay.format(new Date(x.t))}</span><span><b class="nw">${fmt(x.w)}</b> ${unitName(x.u)}${d ? ` <em class="delta">${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</em>` : ''}</span></li>`;
-      }).join('')}</ul>` : ''}`, fd => {
+      }).join('')}</ul>` : ''}
+      <a class="text-btn" href="#/body">${tr('شوف وزنك بالأسابيع', 'See your weight by week')}</a>`, fd => {
       const v = num(fd.get('w'));
       if (!(v > 20 && v < 700)) { toast(tr('اكتب وزنك صح.', 'Enter a valid weight.')); return false; }
       const t0 = startOfDay(Date.now());
@@ -1352,6 +1378,392 @@
       }).join('')}`;
   }
 
+  /* ---------- وزن الجسم: البداية والأسابيع ---------- */
+  const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
+  const wkName = k => (EN ? `Week ${k}` : k <= 10 ? `الأسبوع ${ORD[k - 1]}` : `الأسبوع ${k}`);
+  const addDays = (t, n) => { const d = new Date(startOfDay(t)); d.setDate(d.getDate() + n); return d.getTime(); };
+  const dayIdx = (a, b) => Math.round((startOfDay(b) - startOfDay(a)) / 864e5);
+  const r1 = n => Math.round(n * 10) / 10;
+  const pad2 = n => String(n).padStart(2, '0');
+  const isoDay = t => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+  function parseIso(s) {
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return 0;
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    return isNaN(d) ? 0 : d.getTime();
+  }
+  const NOON = 12 * 36e5;
+  const fmtRange = (a, b) => {
+    try { return dfShort.formatRange(new Date(a), new Date(b)); } catch (e) { return `${dfShort.format(new Date(a))} – ${dfShort.format(new Date(b))}`; }
+  };
+  const bodyU = () => S.prefs.bu || (lastBody() ? lastBody().u : S.prefs.unit);
+  const bwAs = (x, u) => r1(conv(x.w, x.u, u));
+  const bodyAt = t => S.body.find(x => dayKey(x.t) === dayKey(t)) || null;
+  const startE = () => (S.bstart ? bodyAt(S.bstart) : null);
+  const diffTxt = v => (v ? signed(v) : '0');
+  const BOPEN = new Map();
+
+  function bodyData() {
+    const s = startE();
+    if (!s) return null;
+    const u = bodyU(), s0 = startOfDay(S.bstart), t0 = startOfDay(Date.now());
+    const sw = bwAs(s, u);
+    const nowK = Math.max(1, Math.ceil(dayIdx(s0, t0) / 7));
+    const es = S.body.map(x => ({ x, n: dayIdx(s0, x.t), w: bwAs(x, u) })).filter(e => e.n >= 1 && e.n <= 7 * nowK);
+    const weeks = [];
+    let prev = sw;
+    for (let k = 1; k <= nowK; k++) {
+      const list = es.filter(e => Math.ceil(e.n / 7) === k).sort((a, z) => a.n - z.n);
+      const avg = list.length ? r1(list.reduce((a, e) => a + e.w, 0) / list.length) : null;
+      const from = addDays(s0, 7 * (k - 1) + 1), to = addDays(s0, 7 * k);
+      const days = [];
+      for (let i = 0; i < 7; i++) days.push(addDays(from, i));
+      const open = days.filter(t => t <= t0 && !list.some(e => dayKey(e.x.t) === dayKey(t))).length;
+      weeks.push({ k, from, to, days, list, avg, open, dl: avg == null ? null : r1(avg - prev), now: k === nowK, started: from <= t0 });
+      if (avg != null) prev = avg;
+    }
+    const lastE = es.reduce((a, e) => (!a || e.x.t > a.x.t ? e : a), null);
+    return { u, s, sw, s0, t0, nowK, weeks, lastE, diff: lastE ? r1(lastE.w - sw) : null };
+  }
+
+  function weekCard(w, d) {
+    const n = w.list.length;
+    const isOpen = BOPEN.has(w.k) ? BOPEN.get(w.k) : w.now;
+    const val = w.avg != null
+      ? `<span class="wkc-v"><b class="nw">${fmt(w.avg)}</b><small>${n > 1 ? tr('المعدل', 'average') : tr('الوزن', 'weight')} <em class="delta">${diffTxt(w.dl)}</em></small></span>`
+      : `<span class="wkc-v"><small>${w.started ? tr('فاضي', 'empty') : tr('ما بدأ', 'not yet')}</small></span>`;
+    let add;
+    if (n >= 7) add = tr('سجلت كل أيام الأسبوع', 'All 7 days logged');
+    else if (!w.started) add = tr(`يبدأ ${dfDay.format(new Date(w.from))}`, `Starts ${dfDay.format(new Date(w.from))}`);
+    else if (!w.open) add = tr('باقي أيامه ما جات', 'Its other days are still ahead');
+    else if (!n) add = tr('أضف وزن ويوم', 'Add a weight and day');
+    else add = tr(`أضف يوم (${n} من 7)`, `Add a day (${n} of 7)`);
+    return `<details class="wkc${w.now ? ' now' : ''}" data-k="${w.k}"${isOpen ? ' open' : ''}>
+      <summary>
+        <span class="wkc-t"><span class="wkc-n"><b>${wkName(w.k)}</b>${w.now ? `<i>${tr('هذا الأسبوع', 'This week')}</i>` : ''}</span><small>${esc(fmtRange(w.from, w.to))}</small></span>
+        ${val}
+      </summary>
+      <div class="wkc-b">
+        ${n ? `<ul class="wkc-list">${w.list.map(e => `<li><button type="button" class="wkc-row" data-act="b-edit" data-t="${e.x.t}" aria-label="${tr('عدّل وزن', 'Edit weight for')} ${esc(dfDay.format(new Date(e.x.t)))}">
+          <span><b>${dfWeek.format(new Date(e.x.t))}</b><small>${dfShort.format(new Date(e.x.t))}</small></span>
+          <span class="wkc-w"><b class="nw">${fmt(e.w)}</b> ${unitName(d.u)}</span>
+        </button></li>`).join('')}</ul>` : ''}
+        <button type="button" class="add-set wkc-add" data-act="b-add" data-k="${w.k}"${w.open && n < 7 ? '' : ' disabled'}>${w.open && n < 7 ? I.plus : ''}<span>${add}</span></button>
+      </div>
+    </details>`;
+  }
+
+  const uSeg = (act, cur, opts) => `<div class="seg light" role="group" aria-label="${tr('الوحدة', 'Unit')}">${opts.map(([v, l]) => `<button type="button" data-act="${act}" data-u="${v}" aria-pressed="${cur === v}">${l}</button>`).join('')}</div>`;
+
+  function viewBody() {
+    const u = bodyU();
+    const d = bodyData();
+    let html = `<header class="top small">
+        <div class="bhead-row"><h1 class="title">${tr('وزن الجسم', 'Body weight')}</h1>${uSeg('b-unit', u, [['kg', tr('كجم', 'kg')], ['lb', tr('رطل', 'lb')]])}</div>
+        <p class="tag">${tr('حط وزنك يوم بديت، وكل أسبوع سجّل وزنك يوم أو أكثر، وتشوف كم نزلت أو زدت.', 'Set the weight you started at, then log your weight on one or more days each week and see how much it moved.')}</p>
+      </header>`;
+    if (!d) {
+      html += `<section class="board bstart" aria-label="${tr('وزن البداية', 'Starting weight')}">
+          <div class="board-top"><span>${tr('وزن البداية', 'Starting weight')}</span></div>
+          <div class="bs-main"><span class="led led-xl dim">—</span><p class="bs-empty">${tr('حط وزنك اللي بديت فيه وتاريخه، وتنفتح لك الأسابيع تحته.', 'Enter the weight you started at and its date, and your weeks open below it.')}</p></div>
+        </section>
+        <button type="button" class="go" data-act="b-start">${I.plus}<span>${tr('حط وزن البداية', 'Set your starting weight')}</span></button>`;
+      app.innerHTML = html;
+      return;
+    }
+    const L = d.lastE;
+    html += `<section class="board bstart" aria-label="${tr('وزن البداية', 'Starting weight')}">
+        <div class="board-top"><span>${tr('وزن البداية', 'Starting weight')}</span><button type="button" class="bd-btn" data-act="b-start">${tr('عدّل', 'Edit')}</button></div>
+        <div class="bs-main">
+          <span class="bs-w"><span class="led led-xl" id="bsW">${fmt(d.sw)}</span><span class="board-u">${unitName(d.u)}</span></span>
+          <span class="bs-d"><b>${dfWeek.format(new Date(d.s0))}</b><span>${dfDate.format(new Date(d.s0))}</span></span>
+        </div>
+        <div class="board-cells" style="--n:3">
+          <div><span class="led${L ? '' : ' dim'}">${L ? fmt(L.w) : '—'}</span><span>${tr('آخر وزن', 'Latest')}<em>${L ? rel(L.x.t) : tr('ما سجلت للحين', 'none yet')}</em></span></div>
+          <div><span class="led${d.diff == null ? ' dim' : ''}" id="bsDiff">${d.diff == null ? '—' : diffTxt(d.diff)}</span><span>${tr('الفرق من البداية', 'Change since start')}</span></div>
+          <div><span class="led">${d.nowK}</span><span>${tr('الأسبوع الحالي', 'Current week')}</span></div>
+        </div>
+      </section>
+      <h2 class="h2">${tr('أسابيعك', 'Your weeks')}</h2>
+      <div class="wkcs">${d.weeks.map(w => weekCard(w, d)).join('')}</div>
+      <p class="wk-note">${tr('اضغط على الأسبوع يفتح. تسجل فيه من يوم إلى 7 أيام، والرقم الكبير معدل وزنك فيه، والصغير الفرق عن الأسبوع اللي قبله.', 'Tap a week to open it. Log 1 to 7 days in it. The big number is your average for the week, the small one is the change from the week before.')}</p>`;
+    app.innerHTML = html;
+    $$('.wkc').forEach(el => el.addEventListener('toggle', () => BOPEN.set(+el.dataset.k, el.open)));
+  }
+  function reView(fn) { const y = window.scrollY; fn(); window.scrollTo(0, y); }
+
+  function wireBw(dlg) {
+    $('form', dlg).addEventListener('click', e => {
+      const b = e.target.closest('button[data-bw]');
+      if (!b) return;
+      const inp = $('#bwIn');
+      inp.value = fmtIn(Math.max(0, round2(num(inp.value) + +b.dataset.bw)));
+    });
+  }
+  const bwRow = w => `<div class="bw-row">
+      <button type="button" class="stp sm" data-bw="0.5" aria-label="${tr('زِد نص', 'Add 0.5')}">${I.plus}</button>
+      <input class="cnt-v" id="bwIn" name="w" type="text" inputmode="decimal" autocomplete="off" value="${fmtIn(w)}" aria-label="${tr('الوزن', 'Weight')}">
+      <button type="button" class="stp sm" data-bw="-0.5" aria-label="${tr('أنقص نص', 'Subtract 0.5')}">${I.minus}</button>
+    </div>`;
+  const okW = v => v > 20 && v < 700;
+
+  function bodyStartSheet() {
+    const s = startE(), u = bodyU(), last = lastBody();
+    const w = s ? bwAs(s, u) : last ? bwAs(last, u) : (u === 'lb' ? 160 : 75);
+    const t = s ? startOfDay(s.t) : startOfDay(Date.now());
+    openSheet(`
+      <h2>${tr('وزن البداية', 'Starting weight')}</h2>
+      ${bwRow(w)}
+      <p class="bw-unit">${unitName(u)}</p>
+      <label class="fld"><span>${tr('تاريخ البداية', 'Start date')}</span><input type="date" name="d" id="bsDate" value="${isoDay(t)}" max="${isoDay(Date.now())}" required></label>
+      <p class="hint bs-wd" id="bsWd">${dfDay.format(new Date(t))}</p>`, fd => {
+      const v = num(fd.get('w'));
+      if (!okW(v)) { toast(tr('اكتب وزنك صح.', 'Enter a valid weight.')); return false; }
+      const day = parseIso(fd.get('d'));
+      if (!day || day > startOfDay(Date.now())) { toast(tr('اختر تاريخ اليوم أو قبله.', 'Pick today or an earlier date.')); return false; }
+      S.body = S.body.filter(x => dayKey(x.t) !== dayKey(day));
+      S.body.push({ t: day + NOON, w: round2(v), u });
+      S.body.sort((a, z) => a.t - z.t);
+      S.bstart = day;
+      if (!save()) return false;
+      BOPEN.clear();
+      toast(tr(`انحفظ وزن البداية: ${fmt(v)} ${unitName(u)}.`, `Starting weight saved: ${fmt(v)} ${unitName(u)}.`));
+      reView(viewBody);
+    }, tr('احفظ', 'Save'));
+    const dlg = $('#sheet');
+    wireBw(dlg);
+    $('#bsDate').addEventListener('input', e => {
+      const day = parseIso(e.target.value);
+      $('#bsWd').textContent = day ? dfDay.format(new Date(day)) : '';
+    });
+  }
+
+  function bodyDaySheet(k, editT) {
+    if (!startE() || !(k >= 1)) return;
+    const u = bodyU(), s0 = startOfDay(S.bstart), t0 = startOfDay(Date.now());
+    const days = [];
+    for (let i = 1; i <= 7; i++) days.push(addDays(s0, 7 * (k - 1) + i));
+    const ed = editT != null ? S.body.find(x => x.t === editT) : null;
+    const taken = new Map(S.body.map(x => [dayKey(x.t), x]));
+    const mine = t => ed && dayKey(ed.t) === dayKey(t);
+    const free = t => t <= t0 && (!taken.has(dayKey(t)) || mine(t));
+    const sel = ed ? startOfDay(ed.t) : (days.includes(t0) && free(t0) ? t0 : days.find(free));
+    if (sel == null) return;
+    const last = lastBody();
+    const w = ed ? bwAs(ed, u) : last ? bwAs(last, u) : (u === 'lb' ? 160 : 75);
+    openSheet(`
+      <h2>${wkName(k)}: ${ed ? tr('عدّل الوزن', 'Edit weight') : tr('أضف يوم', 'Add a day')}</h2>
+      <fieldset class="fld"><legend>${tr('اختر اليوم', 'Pick the day')}</legend>
+        <div class="dpick">${days.map(t => {
+          const tk = taken.get(dayKey(t));
+          const busy = tk && !mine(t);
+          const dis = t > t0 || busy;
+          return `<label class="dp${dis ? ' off' : ''}"><input type="radio" name="d" value="${t}"${t === sel ? ' checked' : ''}${dis ? ' disabled' : ''}><span><b>${dfWeek.format(new Date(t))}</b><small>${busy ? `${I.check}${fmt(bwAs(tk, u))}` : dfShort.format(new Date(t))}</small></span></label>`;
+        }).join('')}</div>
+      </fieldset>
+      ${bwRow(w)}
+      <p class="bw-unit">${unitName(u)}</p>
+      ${ed ? `<button type="button" class="text-btn danger" data-bdel>${tr('احذف وزن هاليوم', "Delete this day's weight")}</button>` : ''}`, fd => {
+      const v = num(fd.get('w'));
+      if (!okW(v)) { toast(tr('اكتب وزنك صح.', 'Enter a valid weight.')); return false; }
+      const t = +fd.get('d');
+      if (!days.includes(t) || !free(t)) { toast(tr('اختر اليوم.', 'Pick the day.')); return false; }
+      S.body = S.body.filter(x => x !== ed && dayKey(x.t) !== dayKey(t));
+      S.body.push({ t: t + NOON, w: round2(v), u });
+      S.body.sort((a, z) => a.t - z.t);
+      if (!save()) return false;
+      BOPEN.set(k, true);
+      toast(tr(`انحفظ: ${fmt(v)} ${unitName(u)}، ${dfDay.format(new Date(t))}.`, `Saved: ${fmt(v)} ${unitName(u)}, ${dfDay.format(new Date(t))}.`));
+      reView(viewBody);
+    }, tr('احفظ', 'Save'));
+    const dlg = $('#sheet');
+    wireBw(dlg);
+    const del = $('[data-bdel]', dlg);
+    if (del) del.addEventListener('click', () => {
+      if (!confirm(tr('تحذف وزن هاليوم؟', "Delete this day's weight?"))) return;
+      S.body = S.body.filter(x => x !== ed);
+      save();
+      dlg.close();
+      toast(tr('انحذف.', 'Deleted.'));
+      reView(viewBody);
+    });
+  }
+
+  /* ---------- قياسات الجسم ---------- */
+  const MKEYS = [
+    ['chest', 'الصدر', 'Chest'], ['back', 'الظهر', 'Back'], ['shoulders', 'الأكتاف', 'Shoulders'],
+    ['arm', 'الذراع', 'Arm'], ['forearm', 'الساعد', 'Forearm'], ['neck', 'الرقبة', 'Neck'],
+    ['waist', 'الخصر', 'Waist'], ['belly', 'البطن', 'Belly'], ['hips', 'الورك', 'Hips'],
+    ['thigh', 'الفخذ', 'Thigh'], ['calf', 'السمانة', 'Calf']
+  ];
+  const mList = () => MKEYS.map(([k, a, e]) => ({ k, n: tr(a, e) })).concat(S.mx.map(x => ({ k: x.id, n: x.n, custom: true })));
+  const measU = () => (S.prefs.lu === 'in' ? 'in' : 'cm');
+  const luName = u => (u === 'in' ? tr('إنش', 'in') : tr('سم', 'cm'));
+  const mAs = (v, from, to) => r1(from === to ? v : to === 'in' ? v / 2.54 : v * 2.54);
+  const measById = id => S.meas.find(x => x.id === id);
+  let MC = null;
+
+  function viewMeas() {
+    const u = measU(), ss = S.meas;
+    let html = `<header class="top small">
+        <div class="bhead-row"><h1 class="title">${tr('قياسات الجسم', 'Body measurements')}</h1>${uSeg('m-unit', u, [['cm', tr('سم', 'cm')], ['in', tr('إنش', 'in')]])}</div>
+        <p class="tag">${tr('قيس نفسك بالمتر وسجّل الأرقام. وبعد شهر قيس مرة ثانية، ويطلع لك الفرق في كل جزء.', 'Measure yourself with a tape and log the numbers. Measure again a month later to see the change in each part.')}</p>
+      </header>`;
+    const val = (x, k) => (x && k in x.v ? mAs(x.v[k], x.u, u) : null);
+    if (!ss.length) {
+      html += `<p class="empty">${tr('ما سجلت قياسات للحين. ابدأ اليوم: الصدر، الظهر، الذراع، الخصر، وأي جزء تبيه.', 'No measurements yet. Start today: chest, back, arms, waist, and any part you like.')}</p>
+        <a class="go" href="#/meas-new">${I.plus}<span>${tr('سجّل قياسات اليوم', "Log today's measurements")}</span></a>`;
+      app.innerHTML = html;
+      return;
+    }
+    if (ss.length === 1) {
+      const A = ss[0];
+      const keys = mList().filter(m => m.k in A.v);
+      html += `<section class="board mcmp" aria-label="${tr('أول قياس', 'First measurements')}">
+          <div class="board-top"><span>${tr('أول قياس', 'First measurements')}</span><span>${dfDay.format(new Date(A.t))}</span></div>
+          <table class="mc-t one"><tbody>${keys.map(m => `<tr><th scope="row">${esc(m.n)}</th><td class="mc-b"><span class="led">${fmt(val(A, m.k))}</span></td></tr>`).join('')}</tbody></table>
+          <p class="mc-u">${u === 'in' ? tr('كل الأرقام بالإنش', 'All numbers in inches') : tr('كل الأرقام بالسنتيمتر', 'All numbers in cm')}</p>
+        </section>
+        <p class="hint">${tr('بعد شهر سجّل قياسات جديدة، ويطلع لك هنا الفرق في كل جزء.', 'Log new measurements in a month, and the change in each part shows up here.')}</p>`;
+    } else {
+      let A = measById(MC && MC.a) || ss[0], B = measById(MC && MC.b) || ss[ss.length - 1];
+      const keys = mList().filter(m => m.k in A.v || m.k in B.v);
+      const gap = Math.abs(dayIdx(A.t, B.t));
+      const opts = sel => ss.map(x => `<option value="${esc(x.id)}"${x === sel ? ' selected' : ''}>${esc(dfDate.format(new Date(x.t)))}</option>`).join('');
+      html += `<section class="board mcmp" aria-label="${tr('قارن القياسات', 'Compare measurements')}">
+          <div class="mc-pick">
+            <label class="mc-sel"><span>${tr('من', 'From')}</span><select id="mcA">${opts(A)}</select></label>
+            <label class="mc-sel"><span>${tr('إلى', 'To')}</span><select id="mcB">${opts(B)}</select></label>
+          </div>
+          <p class="mc-gap">${A === B ? tr('اختر تاريخين مختلفين عشان تشوف الفرق.', 'Pick two different dates to see the change.') : tr(`بين القياسين ${plural(gap, W.day)}`, `${plural(gap, W.day)} apart`)}</p>
+          <table class="mc-t">
+            <thead><tr><th scope="col">${tr('الجزء', 'Part')}</th><th scope="col">${esc(dfShort.format(new Date(A.t)))}</th><th scope="col">${esc(dfShort.format(new Date(B.t)))}</th><th scope="col">${tr('الفرق', 'Change')}</th></tr></thead>
+            <tbody>${keys.map(m => {
+              const a = val(A, m.k), b = val(B, m.k);
+              const df = a != null && b != null ? r1(b - a) : null;
+              return `<tr><th scope="row">${esc(m.n)}</th><td class="mc-a">${a == null ? '—' : fmt(a)}</td><td class="mc-b"><span class="led">${b == null ? '—' : fmt(b)}</span></td><td class="mc-d${df > 0 ? ' up' : df < 0 ? ' down' : ''}">${df == null ? '' : diffTxt(df)}</td></tr>`;
+            }).join('')}</tbody>
+          </table>
+          <p class="mc-u">${u === 'in' ? tr('كل الأرقام بالإنش', 'All numbers in inches') : tr('كل الأرقام بالسنتيمتر', 'All numbers in cm')}</p>
+        </section>`;
+    }
+    html += `<a class="go" href="#/meas-new">${I.plus}<span>${tr('سجّل قياسات جديدة', 'Log new measurements')}</span></a>
+      <h2 class="h2">${tr('كل القياسات', 'All measurements')}</h2>
+      <div class="mlist">${ss.slice().reverse().map(x => `<a class="mrow two" href="#/meas-edit/${esc(x.id)}">
+        <span class="mrow-t"><b>${dfDate.format(new Date(x.t))}</b><small>${dfWeek.format(new Date(x.t))}${SEP()}${plural(mList().filter(m => m.k in x.v).length, W.ms)}</small></span>
+        ${I.chev}
+      </a>`).join('')}</div>`;
+    app.innerHTML = html;
+    ['mcA', 'mcB'].forEach(id => {
+      const el = $('#' + id);
+      if (el) el.addEventListener('change', () => { MC = { a: $('#mcA').value, b: $('#mcB').value }; reView(viewMeas); });
+    });
+  }
+
+  function viewMeasEdit(id) {
+    const ed = id ? measById(id) : null;
+    let u = ed ? ed.u : measU();
+    const t = ed ? startOfDay(ed.t) : startOfDay(Date.now());
+    const prevOf = k => {
+      for (let i = S.meas.length - 1; i >= 0; i--) {
+        const x = S.meas[i];
+        if (x !== ed && (!ed || x.t < ed.t) && k in x.v) return x;
+      }
+      return null;
+    };
+    const lastTxt = k => { const p = prevOf(k); return p ? `${tr('آخر مرة', 'Last time')} ${fmt(mAs(p.v[k], p.u, u))}` : ''; };
+    const field = m => `<div class="mfld" data-k="${esc(m.k)}">
+        <label for="mk-${esc(m.k)}">${esc(m.n)}</label>
+        <span class="mfld-in"><input id="mk-${esc(m.k)}" name="k:${esc(m.k)}" type="text" inputmode="decimal" autocomplete="off" value="${ed && m.k in ed.v ? fmtIn(ed.v[m.k]) : ''}"><small class="lu">${luName(u)}</small></span>
+        <em class="last">${lastTxt(m.k)}</em>
+        ${m.custom ? `<button type="button" class="mfld-x" data-mx="${esc(m.k)}" aria-label="${tr('شيل', 'Remove')}: ${esc(m.n)}">${I.x}</button>` : ''}
+      </div>`;
+    app.innerHTML = `
+      <a class="back" href="#/meas">${I.back}${tr('قياسات الجسم', 'Body measurements')}</a>
+      <header class="top small"><h1 class="title">${ed ? tr('عدّل القياسات', 'Edit measurements') : tr('قياسات جديدة', 'New measurements')}</h1></header>
+      <form id="mf" novalidate>
+        <div class="mf-top">
+          <label class="fld"><span>${tr('تاريخ القياس', 'Date')}</span><input type="date" name="d" id="mfDate" value="${isoDay(t)}" max="${isoDay(Date.now())}"></label>
+          <div class="fld"><span>${tr('الوحدة', 'Unit')}</span><div class="seg light" role="group" aria-label="${tr('الوحدة', 'Unit')}"><button type="button" data-lu="cm" aria-pressed="${u === 'cm'}">${tr('سم', 'cm')}</button><button type="button" data-lu="in" aria-pressed="${u === 'in'}">${tr('إنش', 'in')}</button></div></div>
+        </div>
+        <p class="hint mf-wd" id="mfWd">${dfWeek.format(new Date(t))}</p>
+        <div class="mgrid" id="mGrid">${mList().map(field).join('')}</div>
+        <button type="button" class="add-row" id="mAdd">${I.plus}<span>${tr('أخرى: أضف جزء ثاني تقيسه', 'Other: add another part')}</span></button>
+        <p class="hint">${tr('للدقة: قيس الصبح قبل الأكل، بنفس المتر، وخل المتر على الجلد بدون ما تشده. واترك الخانة فاضية إذا ما قستها.', 'For accuracy: measure in the morning before eating, with the same tape, snug on the skin without pulling. Leave a box empty if you skip it.')}</p>
+        <div class="savebar"><button class="go" type="submit">${I.check}<span>${tr('احفظ القياسات', 'Save measurements')}</span></button></div>
+        ${ed ? `<button type="button" class="text-btn danger" id="mDel">${tr('احذف هالقياسات', 'Delete these measurements')}</button>` : ''}
+      </form>`;
+    const form = $('#mf');
+    $('#mfDate').addEventListener('input', e => {
+      const day = parseIso(e.target.value);
+      $('#mfWd').textContent = day ? dfWeek.format(new Date(day)) : '';
+    });
+    form.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.lu) {
+        u = b.dataset.lu;
+        $$('[data-lu]', form).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.lu === u)));
+        $$('.mfld', form).forEach(f => { $('.lu', f).textContent = luName(u); $('.last', f).textContent = lastTxt(f.dataset.k); });
+      } else if (b.dataset.mx) {
+        const x = S.mx.find(y => y.id === b.dataset.mx);
+        if (!x || !confirm(tr(`تشيل «${x.n}» من القائمة؟`, `Remove "${x.n}" from the list?`))) return;
+        S.mx = S.mx.filter(y => y !== x);
+        save();
+        b.closest('.mfld').remove();
+      } else if (b.id === 'mAdd') {
+        openSheet(`<h2>${tr('جزء ثاني تقيسه', 'Another part to measure')}</h2>
+          <label class="fld"><span>${tr('اسمه', 'Name')}</span><input type="text" name="n" maxlength="24" placeholder="${tr('مثل: الذراع اليسار، تحت الصدر', 'e.g. Left arm, Under chest')}" autocomplete="off"></label>`, fd => {
+          const n = String(fd.get('n') || '').trim().slice(0, 24);
+          if (!n) { toast(tr('اكتب اسم الجزء.', 'Type the part name.')); return false; }
+          const m = { k: 'x-' + uid(), n, custom: true };
+          S.mx.push({ id: m.k, n });
+          if (!save()) return false;
+          $('#mGrid').insertAdjacentHTML('beforeend', field(m));
+          setTimeout(() => { const inp = $('#mk-' + m.k); if (inp) inp.focus(); }, 80);
+        });
+      } else if (b.id === 'mDel') {
+        if (!confirm(tr('تحذف قياسات هاليوم؟', 'Delete these measurements?'))) return;
+        S.meas = S.meas.filter(x => x !== ed);
+        save();
+        MC = null;
+        location.hash = '#/meas';
+        toast(tr('انحذفت القياسات.', 'Measurements deleted.'));
+      }
+    });
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const day = parseIso(fd.get('d'));
+      if (!day || day > startOfDay(Date.now())) { toast(tr('اختر تاريخ اليوم أو قبله.', 'Pick today or an earlier date.')); return; }
+      const max = u === 'in' ? 160 : 400;
+      const v = {};
+      let bad = null;
+      for (const [k, raw] of fd.entries()) {
+        if (!k.startsWith('k:') || !String(raw).trim()) continue;
+        const n = num(raw);
+        if (n > 0 && n < max) v[k.slice(2)] = round2(n); else if (!bad) bad = k.slice(2);
+      }
+      if (bad) { toast(tr('فيه رقم مو منطقي، راجعه.', "One number doesn't look right. Check it.")); const el = $('#mk-' + bad); if (el) el.focus(); return; }
+      if (!Object.keys(v).length) { toast(tr('اكتب قياس واحد على الأقل.', 'Enter at least one measurement.')); return; }
+      const other = S.meas.find(x => x !== ed && dayKey(x.t) === dayKey(day));
+      if (other) {
+        Object.entries(v).forEach(([k, n]) => { other.v[k] = mAs(n, u, other.u); });
+        if (ed) S.meas = S.meas.filter(x => x !== ed);
+      } else if (ed) {
+        ed.t = day + NOON; ed.u = u; ed.v = v;
+      } else {
+        S.meas.push({ id: 'ms-' + uid(), t: day + NOON, u, v });
+      }
+      S.meas.sort((a, z) => a.t - z.t);
+      S.prefs.lu = u;
+      if (!save()) return;
+      MC = null;
+      location.hash = '#/meas';
+      toast(S.meas.length > 1 ? tr('انحفظت القياسات. شوف الفرق.', 'Saved. See the change.') : tr('انحفظت القياسات.', 'Measurements saved.'));
+    });
+  }
+
   /* ---------- الإعدادات ---------- */
   let installEvt = null;
   window.addEventListener('beforeinstallprompt', e => {
@@ -1483,6 +1895,12 @@
       const haveB = new Set(S.body.map(x => dayKey(x.t)));
       inc.body.forEach(x => { if (!haveB.has(dayKey(x.t))) S.body.push(x); });
       S.body.sort((a, z) => a.t - z.t);
+      if (!S.bstart && inc.bstart && S.body.some(x => startOfDay(x.t) === inc.bstart)) S.bstart = inc.bstart;
+      const haveX = new Set(S.mx.map(x => x.id));
+      inc.mx.forEach(x => { if (!haveX.has(x.id)) S.mx.push(x); });
+      const haveM = new Set(S.meas.map(x => x.id));
+      inc.meas.forEach(x => { if (!haveM.has(x.id)) { S.meas.push(x); added++; } });
+      S.meas.sort((a, z) => a.t - z.t);
       Object.assign(S.prefs.mu, inc.prefs.mu);
       Object.assign(S.prefs.step, inc.prefs.step);
       if (save()) toast(added ? tr(`رجعت ${plural(added, W.log)}.`, `Restored ${plural(added, W.log)}.`) : tr('كل اللي في النسخة موجود عندك من قبل.', 'Everything in this backup is already here.'));
@@ -1574,6 +1992,14 @@
     }
     else if (act === 'add-sec') addSectionSheet();
     else if (act === 'body') bodySheet();
+    else if (act === 'b-start') bodyStartSheet();
+    else if (act === 'b-add') bodyDaySheet(+a.dataset.k);
+    else if (act === 'b-edit') {
+      const x = S.body.find(y => y.t === +a.dataset.t);
+      if (x && S.bstart) bodyDaySheet(Math.ceil(dayIdx(S.bstart, x.t) / 7), x.t);
+    }
+    else if (act === 'b-unit') { S.prefs.bu = a.dataset.u === 'lb' ? 'lb' : 'kg'; save(); reView(viewBody); }
+    else if (act === 'm-unit') { S.prefs.lu = a.dataset.u === 'in' ? 'in' : 'cm'; save(); reView(viewMeas); }
     else if (act === 'photo') openPhoto(mById(curM));
     else if (act === 'add-m') addMachineSheet(curSec);
     else if (act === 'del-log') {
